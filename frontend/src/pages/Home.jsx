@@ -1,19 +1,20 @@
 import { motion } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
-import { useSelector } from 'react-redux';
-import { useState } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import { useState, useEffect } from 'react';
 import {
   HiOutlineMagnifyingGlass,
   HiOutlineMapPin,
   HiOutlineArrowRight,
   HiOutlineShieldCheck,
   HiOutlineTruck,
-  HiOutlineChatBubbleLeftRight,
 } from 'react-icons/hi2';
 import ProductCard from '../components/product/ProductCard';
 import Button from '../components/common/Button';
 import { CATEGORIES } from '../utils/constants';
 import useLocation from '../hooks/useLocation';
+import { listProducts, getNearbyProducts } from '../services/productsApi';
+import { setProducts, setLoading } from '../features/products/productsSlice';
 
 const fadeInUp = {
   initial: { opacity: 0, y: 30 },
@@ -31,12 +32,38 @@ const stagger = {
 
 export default function Home() {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const [searchQuery, setSearchQuery] = useState('');
   const products = useSelector((state) => state.products.items);
+  const isLoading = useSelector((state) => state.products.isLoading);
   const { isAuthenticated } = useSelector((state) => state.auth);
-  const { locationName, radius, requestLocation, permissionStatus } = useLocation();
+  const { locationName, radius, requestLocation, permissionStatus, userLocation } = useLocation();
 
-  const nearbyProducts = [...products].sort((a, b) => (a.distance || 0) - (b.distance || 0)).slice(0, 4);
+  useEffect(() => {
+    async function loadHomeProducts() {
+      dispatch(setLoading(true));
+      try {
+        if (userLocation?.lat && userLocation?.lng) {
+          const nearby = await getNearbyProducts({
+            lat: userLocation.lat,
+            lng: userLocation.lng,
+            radius: radius || 10,
+          });
+          dispatch(setProducts(nearby));
+        } else {
+          const res = await listProducts({ limit: 12 });
+          dispatch(setProducts(res.products || []));
+        }
+      } catch {
+        dispatch(setProducts([]));
+      } finally {
+        dispatch(setLoading(false));
+      }
+    }
+    loadHomeProducts();
+  }, [dispatch, userLocation, radius]);
+
+  const nearbyProducts = [...products].slice(0, 4);
   const recentProducts = [...products].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 4);
 
   const handleSearch = (e) => {
@@ -52,7 +79,6 @@ export default function Home() {
     <div className="min-h-screen">
       {/* ===== HERO SECTION ===== */}
       <section className="relative overflow-hidden bg-gradient-to-br from-primary-600 via-primary-500 to-emerald-500">
-        {/* Background pattern */}
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-10 left-10 w-72 h-72 bg-white rounded-full blur-3xl" />
           <div className="absolute bottom-10 right-10 w-96 h-96 bg-white rounded-full blur-3xl" />
@@ -190,11 +216,23 @@ export default function Home() {
           </div>
         </motion.div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-          {nearbyProducts.map((product, index) => (
-            <ProductCard key={product.id} product={product} index={index} />
-          ))}
-        </div>
+        {isLoading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((n) => (
+              <div key={n} className="h-64 rounded-2xl skeleton" />
+            ))}
+          </div>
+        ) : nearbyProducts.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-neutral-100 p-8 text-center">
+            <p className="text-neutral-500 text-sm">No products listed near you yet.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+            {nearbyProducts.map((product, index) => (
+              <ProductCard key={product.id} product={product} index={index} />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ===== RECENTLY ADDED ===== */}
@@ -213,11 +251,17 @@ export default function Home() {
           </div>
         </motion.div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-          {recentProducts.map((product, index) => (
-            <ProductCard key={product.id} product={product} index={index} />
-          ))}
-        </div>
+        {recentProducts.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-neutral-100 p-8 text-center">
+            <p className="text-neutral-500 text-sm">No products available.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+            {recentProducts.map((product, index) => (
+              <ProductCard key={product.id} product={product} index={index} />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ===== HOW IT WORKS ===== */}

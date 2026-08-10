@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   HiOutlineMagnifyingGlass,
   HiOutlineAdjustmentsHorizontal,
@@ -10,18 +10,18 @@ import {
   HiChevronDown,
 } from 'react-icons/hi2';
 import ProductGrid from '../components/product/ProductGrid';
-import Button from '../components/common/Button';
 import { CATEGORIES, CONDITIONS, SELLER_TYPES, RADIUS_OPTIONS, SORT_OPTIONS } from '../utils/constants';
-import { setFilter, clearFilters } from '../features/products/productsSlice';
+import { setProducts, setLoading, setError } from '../features/products/productsSlice';
 import useLocation from '../hooks/useLocation';
 import useDebounce from '../hooks/useDebounce';
+import { listProducts } from '../services/productsApi';
 
 export default function Marketplace() {
   const dispatch = useDispatch();
   const [searchParams] = useSearchParams();
   const products = useSelector((state) => state.products.items);
-  const filters = useSelector((state) => state.products.filters);
-  const { radius, changeRadius, locationName, requestLocation, permissionStatus } = useLocation();
+  const isLoading = useSelector((state) => state.products.isLoading);
+  const { radius, changeRadius, locationName, requestLocation } = useLocation();
 
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
   const [showFilters, setShowFilters] = useState(false);
@@ -31,67 +31,32 @@ export default function Marketplace() {
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || null);
   const [selectedCondition, setSelectedCondition] = useState(null);
   const [selectedSellerType, setSelectedSellerType] = useState(null);
-  const [selectedSort, setSelectedSort] = useState(searchParams.get('sort') || 'nearest');
+  const [selectedSort, setSelectedSort] = useState(searchParams.get('sort') || 'newest');
 
-  const debouncedSearch = useDebounce(searchInput, 300);
+  const debouncedSearch = useDebounce(searchInput, 400);
 
-  // Filter and sort products
-  const filteredProducts = useMemo(() => {
-    let result = [...products];
-
-    // Search
-    if (debouncedSearch) {
-      const query = debouncedSearch.toLowerCase();
-      result = result.filter(
-        (p) =>
-          p.title.toLowerCase().includes(query) ||
-          p.description.toLowerCase().includes(query) ||
-          p.category?.name?.toLowerCase().includes(query)
-      );
+  useEffect(() => {
+    async function fetchFilteredProducts() {
+      dispatch(setLoading(true));
+      try {
+        const res = await listProducts({
+          search: debouncedSearch || undefined,
+          category: selectedCategory || undefined,
+          condition: selectedCondition || undefined,
+          minPrice: priceMin || undefined,
+          maxPrice: priceMax || undefined,
+          sort: selectedSort === 'price_low' ? 'price-low' : selectedSort === 'price_high' ? 'price-high' : 'newest',
+        });
+        dispatch(setProducts(res.products || []));
+      } catch (err) {
+        dispatch(setError(err?.message || 'Failed to load products'));
+        dispatch(setProducts([]));
+      } finally {
+        dispatch(setLoading(false));
+      }
     }
-
-    // Category
-    if (selectedCategory) {
-      result = result.filter((p) => p.category?.slug === selectedCategory);
-    }
-
-    // Condition
-    if (selectedCondition) {
-      result = result.filter((p) => p.condition === selectedCondition);
-    }
-
-    // Seller type
-    if (selectedSellerType) {
-      result = result.filter((p) => p.seller?.seller_type === selectedSellerType);
-    }
-
-    // Price range
-    if (priceMin) result = result.filter((p) => p.price >= Number(priceMin));
-    if (priceMax) result = result.filter((p) => p.price <= Number(priceMax));
-
-    // Radius
-    if (radius) {
-      result = result.filter((p) => (p.distance || 0) <= radius);
-    }
-
-    // Sort
-    switch (selectedSort) {
-      case 'nearest':
-        result.sort((a, b) => (a.distance || 0) - (b.distance || 0));
-        break;
-      case 'newest':
-        result.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-        break;
-      case 'price_low':
-        result.sort((a, b) => a.price - b.price);
-        break;
-      case 'price_high':
-        result.sort((a, b) => b.price - a.price);
-        break;
-    }
-
-    return result;
-  }, [products, debouncedSearch, selectedCategory, selectedCondition, selectedSellerType, priceMin, priceMax, radius, selectedSort]);
+    fetchFilteredProducts();
+  }, [dispatch, debouncedSearch, selectedCategory, selectedCondition, selectedSellerType, priceMin, priceMax, selectedSort]);
 
   const activeFilterCount = [selectedCategory, selectedCondition, selectedSellerType, priceMin, priceMax].filter(Boolean).length;
 
@@ -102,12 +67,10 @@ export default function Marketplace() {
     setPriceMin('');
     setPriceMax('');
     setSearchInput('');
-    dispatch(clearFilters());
   };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-      {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -119,9 +82,7 @@ export default function Marketplace() {
         </p>
       </motion.div>
 
-      {/* Search + Filter Bar */}
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        {/* Search */}
         <div className="relative flex-1">
           <HiOutlineMagnifyingGlass className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
           <input
@@ -141,7 +102,6 @@ export default function Marketplace() {
           )}
         </div>
 
-        {/* Sort */}
         <div className="relative">
           <button
             onClick={() => setSortOpen(!sortOpen)}
@@ -174,7 +134,6 @@ export default function Marketplace() {
           )}
         </div>
 
-        {/* Filter Toggle */}
         <button
           onClick={() => setShowFilters(!showFilters)}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
@@ -193,7 +152,6 @@ export default function Marketplace() {
         </button>
       </div>
 
-      {/* Location & Radius Bar */}
       <div className="flex flex-wrap items-center gap-2 mb-6">
         <button
           onClick={requestLocation}
@@ -220,7 +178,6 @@ export default function Marketplace() {
         </div>
       </div>
 
-      {/* Filter Panel */}
       {showFilters && (
         <motion.div
           initial={{ opacity: 0, height: 0 }}
@@ -229,7 +186,6 @@ export default function Marketplace() {
           className="bg-white rounded-2xl border border-neutral-100 p-4 sm:p-6 mb-6"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Category */}
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-2">Category</label>
               <select
@@ -244,7 +200,6 @@ export default function Marketplace() {
               </select>
             </div>
 
-            {/* Condition */}
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-2">Condition</label>
               <select
@@ -259,7 +214,6 @@ export default function Marketplace() {
               </select>
             </div>
 
-            {/* Seller Type */}
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-2">Seller Type</label>
               <select
@@ -274,7 +228,6 @@ export default function Marketplace() {
               </select>
             </div>
 
-            {/* Price Range */}
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-2">Price Range</label>
               <div className="flex gap-2">
@@ -309,7 +262,6 @@ export default function Marketplace() {
         </motion.div>
       )}
 
-      {/* Category Pills — horizontal scroll */}
       <div className="flex gap-2 mb-6 overflow-x-auto styled-scrollbar scroll-fade pb-2 px-1">
         <button
           onClick={() => setSelectedCategory(null)}
@@ -337,15 +289,13 @@ export default function Marketplace() {
         ))}
       </div>
 
-      {/* Results Count */}
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-neutral-500">
-          {filteredProducts.length} product{filteredProducts.length !== 1 ? 's' : ''} found
+          {products.length} product{products.length !== 1 ? 's' : ''} found
         </p>
       </div>
 
-      {/* Product Grid */}
-      <ProductGrid products={filteredProducts} />
+      <ProductGrid products={products} isLoading={isLoading} />
     </div>
   );
 }

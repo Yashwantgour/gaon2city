@@ -18,13 +18,14 @@ import EmptyState from '../components/common/EmptyState';
 import { logout } from '../features/auth/authSlice';
 import { showToast } from '../features/ui/uiSlice';
 import { getSellerTypeLabel } from '../utils/helpers';
+import { signOut } from '../services/authApi';
 
 export default function Profile() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { isAuthenticated, user } = useSelector((state) => state.auth);
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !user) {
     return (
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
         <EmptyState
@@ -37,7 +38,12 @@ export default function Profile() {
     );
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } catch {
+      // Continue client logout even if backend fails
+    }
     dispatch(logout());
     dispatch(showToast({ type: 'info', message: 'Signed out successfully' }));
     navigate('/');
@@ -54,7 +60,6 @@ export default function Profile() {
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        {/* Profile Card */}
         <div className="bg-white rounded-2xl border border-neutral-100 p-6 mb-6">
           <div className="flex items-center gap-4">
             {user.avatar_url ? (
@@ -78,7 +83,7 @@ export default function Profile() {
               <p className="text-sm text-neutral-500">{user.email}</p>
               <div className="flex items-center gap-2 mt-1 text-sm text-neutral-500">
                 <HiOutlineMapPin className="w-3.5 h-3.5 text-primary-500" />
-                {user.village}, {user.city}, {user.state}
+                {[user.village, user.city, user.state].filter(Boolean).join(', ') || 'Location not set'}
               </div>
               {user.seller_type && (
                 <span className="inline-flex items-center mt-2 px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-700">
@@ -98,7 +103,6 @@ export default function Profile() {
           </Button>
         </div>
 
-        {/* Menu */}
         <div className="bg-white rounded-2xl border border-neutral-100 divide-y divide-neutral-100 mb-6">
           {menuItems.map((item) => (
             <button
@@ -115,7 +119,6 @@ export default function Profile() {
           ))}
         </div>
 
-        {/* Logout */}
         <button
           onClick={handleLogout}
           className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-2xl border border-red-200 text-danger-500 hover:bg-red-50 transition-colors text-sm font-medium"

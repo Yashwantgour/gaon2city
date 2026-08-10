@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -8,15 +8,46 @@ import {
   HiOutlineArrowLeft,
 } from 'react-icons/hi2';
 import EmptyState from '../components/common/EmptyState';
-import { mockConversations, mockMessages } from '../services/mockData';
 import { formatRelativeTime } from '../utils/helpers';
+import { listConversations, getMessages, sendMessage, markMessageRead } from '../services/conversationsApi';
 
 export default function Chat() {
   const navigate = useNavigate();
   const { isAuthenticated, user } = useSelector((state) => state.auth);
+  const [conversations, setConversations] = useState([]);
   const [selectedConv, setSelectedConv] = useState(null);
   const [messageInput, setMessageInput] = useState('');
-  const [messages, setMessages] = useState(mockMessages);
+  const [messages, setMessages] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchConvs() {
+      if (!isAuthenticated) return;
+      setIsLoading(true);
+      try {
+        const convList = await listConversations();
+        setConversations(convList || []);
+      } catch {
+        setConversations([]);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchConvs();
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    async function fetchMsgs() {
+      if (!selectedConv) return;
+      try {
+        const msgList = await getMessages(selectedConv.id);
+        setMessages(msgList || []);
+      } catch {
+        setMessages([]);
+      }
+    }
+    fetchMsgs();
+  }, [selectedConv]);
 
   if (!isAuthenticated) {
     return (
@@ -30,18 +61,16 @@ export default function Chat() {
     );
   }
 
-  const handleSend = () => {
-    if (!messageInput.trim()) return;
-    const newMsg = {
-      id: Date.now().toString(),
-      conversation_id: selectedConv.id,
-      sender_id: user.id,
-      message: messageInput,
-      created_at: new Date().toISOString(),
-      read_at: null,
-    };
-    setMessages([...messages, newMsg]);
+  const handleSend = async () => {
+    if (!messageInput.trim() || !selectedConv) return;
+    const text = messageInput.trim();
     setMessageInput('');
+    try {
+      const sent = await sendMessage(selectedConv.id, { message: text });
+      setMessages((prev) => [...prev, sent]);
+    } catch {
+      // Revert if send fails
+    }
   };
 
   return (
@@ -50,7 +79,6 @@ export default function Chat() {
         <h1 className="text-2xl font-bold text-neutral-800 mb-6">Messages</h1>
 
         <div className="bg-white rounded-2xl border border-neutral-100 overflow-hidden h-[65vh] flex">
-          {/* Conversation List */}
           <div className={`w-full sm:w-80 border-r border-neutral-100 flex flex-col shrink-0 ${selectedConv ? 'hidden sm:flex' : 'flex'}`}>
             <div className="p-3 border-b border-neutral-100">
               <input
@@ -60,46 +88,48 @@ export default function Chat() {
               />
             </div>
             <div className="flex-1 overflow-y-auto">
-              {mockConversations.map((conv) => {
-                const other = conv.buyer.id === user.id ? conv.seller : conv.buyer;
-                return (
-                  <button
-                    key={conv.id}
-                    onClick={() => setSelectedConv(conv)}
-                    className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-neutral-50 transition-colors text-left ${
-                      selectedConv?.id === conv.id ? 'bg-primary-50' : ''
-                    }`}
-                  >
-                    <img
-                      src={other.avatar_url}
-                      alt={other.name}
-                      className="w-10 h-10 rounded-full object-cover shrink-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-sm font-semibold text-neutral-800 truncate">{other.name}</h4>
-                        <span className="text-[10px] text-neutral-400 shrink-0">
-                          {formatRelativeTime(conv.last_message_at)}
-                        </span>
+              {isLoading ? (
+                <div className="p-4 text-center text-xs text-neutral-400">Loading chats...</div>
+              ) : conversations.length === 0 ? (
+                <div className="p-6 text-center text-xs text-neutral-400">No conversations yet</div>
+              ) : (
+                conversations.map((conv) => {
+                  const other = conv.buyer?.id === user?.id ? conv.seller : conv.buyer;
+                  return (
+                    <button
+                      key={conv.id}
+                      onClick={() => setSelectedConv(conv)}
+                      className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-neutral-50 transition-colors text-left ${
+                        selectedConv?.id === conv.id ? 'bg-primary-50' : ''
+                      }`}
+                    >
+                      <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center font-bold text-primary-600 shrink-0">
+                        {other?.name?.charAt(0) || 'U'}
                       </div>
-                      <p className="text-xs text-neutral-500 truncate mt-0.5">{conv.last_message}</p>
-                    </div>
-                    {conv.unread_count > 0 && (
-                      <span className="w-5 h-5 bg-primary-500 text-white rounded-full text-[10px] flex items-center justify-center font-bold shrink-0">
-                        {conv.unread_count}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-semibold text-neutral-800 truncate">{other?.name || 'User'}</h4>
+                          <span className="text-[10px] text-neutral-400 shrink-0">
+                            {formatRelativeTime(conv.last_message_at)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-neutral-500 truncate mt-0.5">{conv.last_message || 'No messages yet'}</p>
+                      </div>
+                      {conv.unread_count > 0 && (
+                        <span className="w-5 h-5 bg-primary-500 text-white rounded-full text-[10px] flex items-center justify-center font-bold shrink-0">
+                          {conv.unread_count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })
+              )}
             </div>
           </div>
 
-          {/* Chat Area */}
           <div className={`flex-1 flex flex-col ${selectedConv ? 'flex' : 'hidden sm:flex'}`}>
             {selectedConv ? (
               <>
-                {/* Chat Header */}
                 <div className="flex items-center gap-3 px-4 py-3 border-b border-neutral-100">
                   <button
                     onClick={() => setSelectedConv(null)}
@@ -107,14 +137,12 @@ export default function Chat() {
                   >
                     <HiOutlineArrowLeft className="w-5 h-5" />
                   </button>
-                  <img
-                    src={(selectedConv.buyer.id === user.id ? selectedConv.seller : selectedConv.buyer).avatar_url}
-                    alt=""
-                    className="w-9 h-9 rounded-full object-cover"
-                  />
+                  <div className="w-9 h-9 rounded-full bg-primary-100 flex items-center justify-center font-bold text-primary-600">
+                    {(selectedConv.buyer?.id === user?.id ? selectedConv.seller : selectedConv.buyer)?.name?.charAt(0) || 'U'}
+                  </div>
                   <div>
                     <h4 className="text-sm font-semibold text-neutral-800">
-                      {(selectedConv.buyer.id === user.id ? selectedConv.seller : selectedConv.buyer).name}
+                      {(selectedConv.buyer?.id === user?.id ? selectedConv.seller : selectedConv.buyer)?.name || 'User'}
                     </h4>
                     {selectedConv.product && (
                       <p className="text-xs text-neutral-500">
@@ -124,41 +152,37 @@ export default function Chat() {
                   </div>
                 </div>
 
-                {/* Messages */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                  {messages
-                    .filter((m) => m.conversation_id === selectedConv.id)
-                    .map((msg) => {
-                      const isMe = msg.sender_id === user.id;
-                      return (
-                        <motion.div
-                          key={msg.id}
-                          initial={{ opacity: 0, y: 5 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
+                  {messages.map((msg) => {
+                    const isMe = msg.sender_id === user?.id;
+                    return (
+                      <motion.div
+                        key={msg.id}
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div
+                          className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${
+                            isMe
+                              ? 'bg-primary-500 text-white rounded-br-md'
+                              : 'bg-neutral-100 text-neutral-800 rounded-bl-md'
+                          }`}
                         >
-                          <div
-                            className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${
-                              isMe
-                                ? 'bg-primary-500 text-white rounded-br-md'
-                                : 'bg-neutral-100 text-neutral-800 rounded-bl-md'
+                          <p>{msg.message}</p>
+                          <p
+                            className={`text-[10px] mt-1 ${
+                              isMe ? 'text-primary-200' : 'text-neutral-400'
                             }`}
                           >
-                            <p>{msg.message}</p>
-                            <p
-                              className={`text-[10px] mt-1 ${
-                                isMe ? 'text-primary-200' : 'text-neutral-400'
-                              }`}
-                            >
-                              {formatRelativeTime(msg.created_at)}
-                            </p>
-                          </div>
-                        </motion.div>
-                      );
-                    })}
+                            {formatRelativeTime(msg.created_at)}
+                          </p>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
                 </div>
 
-                {/* Input */}
                 <div className="p-3 border-t border-neutral-100">
                   <div className="flex items-center gap-2">
                     <button className="p-2 rounded-lg text-neutral-400 hover:text-neutral-600 hover:bg-neutral-50">

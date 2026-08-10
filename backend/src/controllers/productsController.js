@@ -38,6 +38,19 @@ export async function getNearbyProducts(req, res, next) {
 }
 
 /**
+ * POST /api/products/upload
+ * Upload image to Supabase Storage under <userId>/ folder.
+ */
+export async function uploadProductImage(req, res, next) {
+  try {
+    const result = await productsService.uploadProductImage(req.user.id, req.body);
+    res.status(201).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * GET /api/products/:id
  */
 export async function getProduct(req, res, next) {
@@ -54,7 +67,7 @@ export async function getProduct(req, res, next) {
  */
 export async function createProduct(req, res, next) {
   try {
-    const product = await productsService.createProduct(req.user.id, req.body);
+    const product = await productsService.createProduct(req.user.id, req.body, req.accessToken);
     res.status(201).json(product);
   } catch (err) {
     next(err);
@@ -66,7 +79,7 @@ export async function createProduct(req, res, next) {
  */
 export async function updateProduct(req, res, next) {
   try {
-    const product = await productsService.updateProduct(req.params.id, req.user.id, req.body);
+    const product = await productsService.updateProduct(req.params.id, req.user.id, req.body, req.accessToken);
     res.json(product);
   } catch (err) {
     next(err);
@@ -78,7 +91,7 @@ export async function updateProduct(req, res, next) {
  */
 export async function deleteProduct(req, res, next) {
   try {
-    const result = await productsService.deleteProduct(req.params.id, req.user.id);
+    const result = await productsService.deleteProduct(req.params.id, req.user.id, req.accessToken);
     res.json(result);
   } catch (err) {
     next(err);

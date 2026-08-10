@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useDispatch, useSelector } from 'react-redux';
 import { useState } from 'react';
@@ -10,15 +10,20 @@ import {
 } from 'react-icons/hi2';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
-import { CATEGORIES, CONDITIONS, SELLER_TYPES } from '../utils/constants';
+import { CONDITIONS, CATEGORIES } from '../utils/constants';
 import { addProduct } from '../features/products/productsSlice';
 import { showToast } from '../features/ui/uiSlice';
+import { createProduct } from '../services/productsApi';
+import { uploadFile } from '../services/storageService';
 
 export default function AddProduct() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { isAuthenticated, user } = useSelector((state) => state.auth);
+  const { isAuthenticated } = useSelector((state) => state.auth);
+
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [imagePreview, setImagePreview] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
     register,
@@ -33,62 +38,62 @@ export default function AddProduct() {
   });
 
   if (!isAuthenticated) {
-    navigate('/login');
-    return null;
+    return <Navigate to="/login" replace />;
   }
 
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    setSelectedFiles((prev) => [...prev, ...files].slice(0, 5));
     const previews = files.map((file) => URL.createObjectURL(file));
     setImagePreview((prev) => [...prev, ...previews].slice(0, 5));
   };
 
   const removeImage = (index) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
     setImagePreview((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const onSubmit = (data) => {
-    const newProduct = {
-      id: Date.now().toString(),
-      seller_id: user.id,
-      category_id: parseInt(data.category),
-      title: data.title,
-      slug: data.title.toLowerCase().replace(/\s+/g, '-'),
-      description: data.description,
-      price: parseFloat(data.price),
-      quantity: parseInt(data.quantity),
-      condition: data.condition,
-      status: 'active',
-      latitude: 26.9124,
-      longitude: 75.7873,
-      distance: 0,
-      pickup_available: data.pickup_available,
-      delivery_available: data.delivery_available,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      images: imagePreview.length > 0
-        ? imagePreview
-        : ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&h=400&fit=crop'],
-      category: CATEGORIES.find((c) => c.id === parseInt(data.category)),
-      seller: {
-        id: user.id,
-        name: user.name,
-        seller_type: user.seller_type,
-        avatar_url: user.avatar_url,
-        village: user.village,
-        city: user.city,
-      },
-    };
+  const onSubmit = async (data) => {
+    setIsSubmitting(true);
+    try {
+      // 1. Upload selected files to Supabase Storage 'Image' bucket
+      const uploadedImageUrls = [];
+      if (selectedFiles.length > 0) {
+        for (const file of selectedFiles) {
+          const publicUrl = await uploadFile(file, 'Image');
+          uploadedImageUrls.push(publicUrl);
+        }
+      }
 
-    dispatch(addProduct(newProduct));
-    dispatch(showToast({ type: 'success', message: 'Product listed successfully!' }));
-    navigate('/seller/dashboard');
+      // 2. Create Product with uploaded image URLs
+      const created = await createProduct({
+        title: data.title,
+        description: data.description,
+        price: parseFloat(data.price),
+        quantity: parseInt(data.quantity),
+        condition: data.condition || 'new',
+        category_id: data.category || null,
+        category: data.category || null,
+        pickup_available: Boolean(data.pickup_available),
+        delivery_available: Boolean(data.delivery_available),
+        images: uploadedImageUrls,
+      });
+
+      dispatch(addProduct(created));
+      dispatch(showToast({ type: 'success', message: 'Product listed successfully!' }));
+      navigate('/seller/dashboard');
+    } catch (err) {
+      dispatch(showToast({ type: 'error', message: err?.message || 'Failed to list product' }));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <button onClick={() => navigate(-1)} className="p-2 rounded-xl hover:bg-neutral-100 transition-colors">
             <HiOutlineArrowLeft className="w-5 h-5 text-neutral-600" />
@@ -105,7 +110,7 @@ export default function AddProduct() {
             <h3 className="text-sm font-semibold text-neutral-700 mb-3">Product Images</h3>
             <div className="flex flex-wrap gap-3">
               {imagePreview.map((img, i) => (
-                <div key={i} className="relative w-24 h-24 rounded-xl overflow-hidden">
+                <div key={i} className="relative w-24 h-24 rounded-xl overflow-hidden border border-neutral-100">
                   <img src={img} alt="" className="w-full h-full object-cover" />
                   <button
                     type="button"
@@ -119,7 +124,7 @@ export default function AddProduct() {
               {imagePreview.length < 5 && (
                 <label className="w-24 h-24 rounded-xl border-2 border-dashed border-neutral-200 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-primary-400 hover:bg-primary-50 transition-colors">
                   <HiOutlinePhoto className="w-6 h-6 text-neutral-400" />
-                  <span className="text-xs text-neutral-400">Add</span>
+                  <span className="text-xs text-neutral-400">Add Image</span>
                   <input type="file" accept="image/*" multiple onChange={handleImageChange} className="hidden" />
                 </label>
               )}
@@ -167,21 +172,23 @@ export default function AddProduct() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1.5">Category</label>
+                <label className="block text-sm font-medium text-neutral-700 mb-1.5">
+                  Category <span className="text-danger-500">*</span>
+                </label>
                 <select
-                  className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
-                  {...register('category', { required: 'Category is required' })}
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white"
+                  {...register('category', { required: 'Please select a category' })}
                 >
-                  <option value="">Select</option>
+                  <option value="">Select Category</option>
                   {CATEGORIES.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                    <option key={c.id} value={c.slug}>{c.name}</option>
                   ))}
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-1.5">Condition</label>
                 <select
-                  className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white"
                   {...register('condition')}
                 >
                   {CONDITIONS.map((c) => (
@@ -206,7 +213,7 @@ export default function AddProduct() {
           </div>
 
           {/* Submit */}
-          <Button type="submit" variant="primary" size="lg" fullWidth>
+          <Button type="submit" variant="primary" size="lg" fullWidth isLoading={isSubmitting}>
             List Product
           </Button>
         </form>

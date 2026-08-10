@@ -1,15 +1,57 @@
 import { motion } from 'framer-motion';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { HiOutlineClipboardDocumentList } from 'react-icons/hi2';
 import EmptyState from '../components/common/EmptyState';
-import Badge from '../components/common/Badge';
-import { mockOrders } from '../services/mockData';
 import { formatPrice, formatDate, getOrderStatusLabel, getStatusColor } from '../utils/helpers';
+import { listOrders } from '../services/ordersApi';
+
+function OrderItemImage({ product }) {
+  const [imgError, setImgError] = useState(false);
+  const imageSource = typeof product?.images?.[0] === 'string'
+    ? product.images[0]
+    : product?.images?.[0]?.storage_path;
+
+  if (!imgError && imageSource) {
+    return (
+      <img
+        src={imageSource}
+        alt={product?.title || 'Product'}
+        className="w-16 h-16 rounded-xl object-cover bg-neutral-100 shrink-0"
+        onError={() => setImgError(true)}
+      />
+    );
+  }
+
+  return (
+    <div className="w-16 h-16 rounded-xl bg-neutral-100 flex items-center justify-center text-xl shrink-0 border border-neutral-100">
+      📦
+    </div>
+  );
+}
 
 export default function Orders() {
   const navigate = useNavigate();
   const { isAuthenticated } = useSelector((state) => state.auth);
+  const [orders, setOrders] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchOrders() {
+      if (!isAuthenticated) return;
+      setIsLoading(true);
+      try {
+        const res = await listOrders({ role: 'buyer' });
+        setOrders(res.orders || []);
+      } catch {
+        setOrders([]);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchOrders();
+  }, [isAuthenticated]);
 
   if (!isAuthenticated) {
     return (
@@ -24,7 +66,14 @@ export default function Orders() {
     );
   }
 
-  const orders = mockOrders;
+  if (isLoading) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-12 text-center">
+        <div className="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+        <p className="text-sm text-neutral-500">Loading your orders...</p>
+      </div>
+    );
+  }
 
   if (orders.length === 0) {
     return (
@@ -55,11 +104,10 @@ export default function Orders() {
               transition={{ delay: index * 0.08 }}
               className="bg-white rounded-2xl border border-neutral-100 overflow-hidden hover:shadow-sm transition-shadow"
             >
-              {/* Order Header */}
               <div className="flex items-center justify-between px-5 py-3 bg-neutral-50 border-b border-neutral-100">
                 <div className="flex items-center gap-4 text-sm">
                   <span className="text-neutral-500">
-                    Order <span className="font-medium text-neutral-700">{order.id}</span>
+                    Order <span className="font-medium text-neutral-700">{order.id.slice(0, 8)}...</span>
                   </span>
                   <span className="text-neutral-300">|</span>
                   <span className="text-neutral-500">{formatDate(order.created_at)}</span>
@@ -69,17 +117,12 @@ export default function Orders() {
                 </span>
               </div>
 
-              {/* Order Items */}
-              <div className="p-5">
-                {order.items.map((item) => (
+              <div className="p-5 space-y-3">
+                {(order.items || []).map((item) => (
                   <div key={item.id} className="flex gap-4">
-                    <img
-                      src={item.product.images?.[0] || ''}
-                      alt={item.product.title}
-                      className="w-16 h-16 rounded-xl object-cover bg-neutral-100"
-                    />
+                    <OrderItemImage product={item.product} />
                     <div className="flex-1">
-                      <h4 className="font-medium text-neutral-800 text-sm">{item.product.title}</h4>
+                      <h4 className="font-medium text-neutral-800 text-sm">{item.product?.title || 'Product'}</h4>
                       <p className="text-xs text-neutral-500 mt-0.5">
                         Qty: {item.quantity} × {formatPrice(item.unit_price)}
                       </p>

@@ -1,8 +1,7 @@
 import { createSlice } from '@reduxjs/toolkit';
-import { mockProducts } from '../../services/mockData';
 
 const initialState = {
-  items: mockProducts,
+  items: [],
   currentProduct: null,
   isLoading: false,
   error: null,
@@ -18,7 +17,7 @@ const initialState = {
   pagination: {
     page: 1,
     limit: 12,
-    total: mockProducts.length,
+    total: 0,
   },
 };
 
@@ -28,7 +27,9 @@ const productsSlice = createSlice({
   reducers: {
     setProducts(state, action) {
       state.items = action.payload;
-      state.pagination.total = action.payload.length;
+    },
+    setPagination(state, action) {
+      state.pagination = { ...state.pagination, ...action.payload };
     },
     setCurrentProduct(state, action) {
       state.currentProduct = action.payload;
@@ -69,7 +70,17 @@ const productsSlice = createSlice({
 });
 
 export const {
-  setProducts, setCurrentProduct, setLoading, setError,
-  setFilter, clearFilters, setPage, addProduct, updateProduct, removeProduct,
+  setProducts,
+  setPagination,
+  setCurrentProduct,
+  setLoading,
+  setError,
+  setFilter,
+  clearFilters,
+  setPage,
+  addProduct,
+  updateProduct,
+  removeProduct,
 } = productsSlice.actions;
+
 export default productsSlice.reducer;

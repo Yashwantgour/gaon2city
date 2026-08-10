@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   HiOutlineMapPin,
   HiOutlineHeart,
@@ -21,18 +21,48 @@ import Badge from '../components/common/Badge';
 import { formatPrice, formatDistance, getConditionLabel, getSellerTypeLabel, formatRelativeTime } from '../utils/helpers';
 import { addToCart } from '../features/cart/cartSlice';
 import { showToast } from '../features/ui/uiSlice';
+import { getProductById } from '../services/productsApi';
 
 export default function ProductDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const products = useSelector((state) => state.products.items);
-  const product = products.find((p) => p.id === id);
+  const [product, setProduct] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [currentImage, setCurrentImage] = useState(0);
   const [isFavorite, setIsFavorite] = useState(false);
   const [quantity, setQuantity] = useState(1);
+  const [imgError, setImgError] = useState(false);
 
-  if (!product) {
+  useEffect(() => {
+    async function loadProduct() {
+      setIsLoading(true);
+      try {
+        const data = await getProductById(id);
+        setProduct(data);
+      } catch {
+        setProduct(null);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadProduct();
+  }, [id]);
+
+  const storeItems = useSelector((state) => state.products.items) || [];
+  const reduxProduct = storeItems.find((p) => String(p.id) === String(id));
+  const activeProduct = product || reduxProduct;
+
+  if (isLoading && !activeProduct) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16 text-center">
+        <div className="w-16 h-16 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-neutral-500">Loading product details...</p>
+      </div>
+    );
+  }
+
+  if (!activeProduct) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16 text-center">
         <p className="text-neutral-500 mb-4">Product not found</p>
@@ -43,24 +73,25 @@ export default function ProductDetails() {
     );
   }
 
-  const images = product.images || [];
-  const relatedProducts = products
-    .filter((p) => p.id !== product.id && p.category?.slug === product.category?.slug)
-    .slice(0, 4);
+  const rawImages = activeProduct.images || (reduxProduct?.images) || [];
+  const images = rawImages.map((img) => (typeof img === 'string' ? img : img?.storage_path)).filter(Boolean);
+  if (images.length === 0 && activeProduct.storage_path) {
+    images.push(activeProduct.storage_path);
+  }
+  const displayImages = images;
 
   const handleAddToCart = () => {
     for (let i = 0; i < quantity; i++) {
-      dispatch(addToCart(product));
+      dispatch(addToCart(activeProduct));
     }
-    dispatch(showToast({ type: 'success', message: `${product.title} added to cart` }));
+    dispatch(showToast({ type: 'success', message: `${activeProduct.title} added to cart` }));
   };
 
-  const nextImage = () => setCurrentImage((prev) => (prev + 1) % images.length);
-  const prevImage = () => setCurrentImage((prev) => (prev - 1 + images.length) % images.length);
+  const nextImage = () => setCurrentImage((prev) => (prev + 1) % displayImages.length);
+  const prevImage = () => setCurrentImage((prev) => (prev - 1 + displayImages.length) % displayImages.length);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-      {/* Breadcrumb */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -73,30 +104,31 @@ export default function ProductDetails() {
         <span>/</span>
         <Link to="/marketplace" className="hover:text-primary-600 transition-colors">Marketplace</Link>
         <span>/</span>
-        <span className="text-neutral-700 line-clamp-1">{product.title}</span>
+        <span className="text-neutral-700 line-clamp-1">{activeProduct.title}</span>
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Image Gallery */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.4 }}
         >
           <div className="relative aspect-square rounded-2xl overflow-hidden bg-neutral-100 mb-3">
-            {images.length > 0 ? (
+            {!imgError && displayImages.length > 0 ? (
               <img
-                src={images[currentImage]}
-                alt={product.title}
+                src={displayImages[currentImage]}
+                alt={activeProduct.title}
                 className="w-full h-full object-cover"
+                onError={() => setImgError(true)}
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <span className="text-6xl opacity-30">📦</span>
+              <div className="w-full h-full flex flex-col items-center justify-center text-neutral-400 bg-neutral-100">
+                <span className="text-6xl mb-2">📦</span>
+                <p className="text-sm font-medium text-neutral-500">No image available</p>
               </div>
             )}
 
-            {images.length > 1 && (
+            {displayImages.length > 1 && (
               <>
                 <button
                   onClick={prevImage}
@@ -113,7 +145,6 @@ export default function ProductDetails() {
               </>
             )}
 
-            {/* Actions */}
             <div className="absolute top-3 right-3 flex gap-2">
               <button
                 onClick={() => setIsFavorite(!isFavorite)}
@@ -130,18 +161,16 @@ export default function ProductDetails() {
               </button>
             </div>
 
-            {/* Image counter */}
-            {images.length > 1 && (
+            {displayImages.length > 1 && (
               <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-black/50 text-white text-xs font-medium">
-                {currentImage + 1} / {images.length}
+                {currentImage + 1} / {displayImages.length}
               </div>
             )}
           </div>
 
-          {/* Thumbnails */}
-          {images.length > 1 && (
+          {displayImages.length > 1 && (
             <div className="flex gap-2">
-              {images.map((img, i) => (
+              {displayImages.map((img, i) => (
                 <button
                   key={i}
                   onClick={() => setCurrentImage(i)}
@@ -156,57 +185,51 @@ export default function ProductDetails() {
           )}
         </motion.div>
 
-        {/* Product Info */}
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.4, delay: 0.1 }}
           className="space-y-5"
         >
-          {/* Category + Condition */}
           <div className="flex flex-wrap gap-2">
-            {product.category && (
-              <Badge variant="primary">{product.category.name}</Badge>
+            {activeProduct.category && (
+              <Badge variant="primary">{activeProduct.category.name}</Badge>
             )}
-            <Badge variant={product.condition === 'new' ? 'success' : 'default'}>
-              {getConditionLabel(product.condition)}
+            <Badge variant={activeProduct.condition === 'new' ? 'success' : 'default'}>
+              {getConditionLabel(activeProduct.condition)}
             </Badge>
           </div>
 
-          {/* Title */}
           <h1 className="text-2xl sm:text-3xl font-bold text-neutral-800 leading-tight">
-            {product.title}
+            {activeProduct.title}
           </h1>
 
-          {/* Price */}
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-extrabold text-primary-600">
-              {formatPrice(product.price)}
+              {formatPrice(activeProduct.price)}
             </span>
-            {product.quantity > 1 && (
+            {activeProduct.quantity > 1 && (
               <span className="text-sm text-neutral-500">per unit</span>
             )}
           </div>
 
-          {/* Location */}
           <div className="flex items-center gap-4 text-sm text-neutral-600">
             <span className="flex items-center gap-1.5">
               <HiOutlineMapPin className="w-4 h-4 text-primary-500" />
-              {formatDistance(product.distance)}
+              {formatDistance(activeProduct.distance)}
             </span>
             <span className="text-neutral-300">|</span>
-            <span>Listed {formatRelativeTime(product.created_at)}</span>
+            <span>Listed {formatRelativeTime(activeProduct.created_at)}</span>
           </div>
 
-          {/* Availability */}
           <div className="flex gap-3">
-            {product.pickup_available && (
+            {activeProduct.pickup_available && (
               <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-green-50 text-green-700 text-sm font-medium">
                 <HiOutlineMapPin className="w-4 h-4" />
                 Pickup Available
               </div>
             )}
-            {product.delivery_available && (
+            {activeProduct.delivery_available && (
               <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50 text-blue-700 text-sm font-medium">
                 <HiOutlineTruck className="w-4 h-4" />
                 Delivery Available
@@ -214,21 +237,18 @@ export default function ProductDetails() {
             )}
           </div>
 
-          {/* Description */}
           <div>
             <h3 className="text-sm font-semibold text-neutral-700 mb-2">Description</h3>
             <p className="text-sm text-neutral-600 leading-relaxed">
-              {product.description}
+              {activeProduct.description}
             </p>
           </div>
 
-          {/* Stock */}
           <div className="flex items-center gap-2 text-sm">
             <span className="text-neutral-500">Available:</span>
-            <span className="font-semibold text-neutral-800">{product.quantity} units</span>
+            <span className="font-semibold text-neutral-800">{activeProduct.quantity} units</span>
           </div>
 
-          {/* Quantity + Add to Cart */}
           <div className="flex items-center gap-3">
             <div className="flex items-center border border-neutral-200 rounded-xl">
               <button
@@ -239,7 +259,7 @@ export default function ProductDetails() {
               </button>
               <span className="w-12 text-center text-sm font-semibold">{quantity}</span>
               <button
-                onClick={() => setQuantity(Math.min(product.quantity, quantity + 1))}
+                onClick={() => setQuantity(Math.min(activeProduct.quantity || 99, quantity + 1))}
                 className="w-10 h-10 flex items-center justify-center text-neutral-600 hover:bg-neutral-50 rounded-r-xl"
               >
                 +
@@ -257,7 +277,6 @@ export default function ProductDetails() {
             </Button>
           </div>
 
-          {/* Action Buttons */}
           <div className="flex gap-3">
             <Button
               variant="outline"
@@ -278,61 +297,42 @@ export default function ProductDetails() {
             </Button>
           </div>
 
-          {/* Seller Card */}
-          {product.seller && (
+          {activeProduct.seller && (
             <div className="bg-neutral-50 rounded-2xl p-4 border border-neutral-100">
               <div className="flex items-center gap-3">
-                {product.seller.avatar_url ? (
+                {activeProduct.seller.avatar_url ? (
                   <img
-                    src={product.seller.avatar_url}
-                    alt={product.seller.name}
+                    src={activeProduct.seller.avatar_url}
+                    alt={activeProduct.seller.name}
                     className="w-12 h-12 rounded-full object-cover ring-2 ring-white shadow-sm"
                   />
                 ) : (
                   <div className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center">
                     <span className="text-primary-600 font-bold text-lg">
-                      {product.seller.name?.charAt(0)}
+                      {activeProduct.seller.name?.charAt(0)}
                     </span>
                   </div>
                 )}
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <h4 className="font-semibold text-neutral-800">{product.seller.name}</h4>
+                    <h4 className="font-semibold text-neutral-800">{activeProduct.seller.name}</h4>
                     <HiOutlineShieldCheck className="w-4 h-4 text-primary-500" />
                   </div>
                   <div className="flex items-center gap-2 text-sm text-neutral-500">
-                    <span>{getSellerTypeLabel(product.seller.seller_type)}</span>
-                    {product.seller.village && (
+                    <span>{getSellerTypeLabel(activeProduct.seller.seller_type)}</span>
+                    {activeProduct.seller.village && (
                       <>
                         <span>•</span>
-                        <span>{product.seller.village}, {product.seller.city}</span>
+                        <span>{activeProduct.seller.village}, {activeProduct.seller.city}</span>
                       </>
                     )}
                   </div>
                 </div>
-                <Link
-                  to={`/seller/${product.seller.id}`}
-                  className="text-sm font-medium text-primary-600 hover:text-primary-700"
-                >
-                  View Profile
-                </Link>
               </div>
             </div>
           )}
         </motion.div>
       </div>
-
-      {/* Related Products */}
-      {relatedProducts.length > 0 && (
-        <section className="mt-12 pt-8 border-t border-neutral-100">
-          <h2 className="text-xl font-bold text-neutral-800 mb-6">Similar Products</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-            {relatedProducts.map((p, i) => (
-              <ProductCard key={p.id} product={p} index={i} />
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   );
 }

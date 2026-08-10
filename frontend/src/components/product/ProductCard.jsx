@@ -12,6 +12,10 @@ export default function ProductCard({ product, index = 0 }) {
   const [isFavorite, setIsFavorite] = useState(false);
   const [imgError, setImgError] = useState(false);
 
+  const imageSource = typeof product.images?.[0] === 'string'
+    ? product.images[0]
+    : product.images?.[0]?.storage_path;
+
   const handleAddToCart = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -37,9 +41,9 @@ export default function ProductCard({ product, index = 0 }) {
         <div className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 border border-neutral-100">
           {/* Image */}
           <div className="relative aspect-[4/3] overflow-hidden bg-neutral-100">
-            {!imgError && product.images?.[0] ? (
+            {!imgError && imageSource ? (
               <img
-                src={product.images[0]}
+                src={imageSource}
                 alt={product.title}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 onError={() => setImgError(true)}

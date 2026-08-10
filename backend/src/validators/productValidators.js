@@ -14,15 +14,16 @@ export const createProductValidators = [
   body('quantity')
     .isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
   body('category_id')
-    .isInt({ min: 1 }).withMessage('Valid category is required'),
+    .optional({ nullable: true }),
   body('condition')
-    .isIn(['new', 'used-like-new', 'used-good', 'used-fair'])
+    .optional({ nullable: true })
+    .isIn(['new', 'used-like-new', 'used-good', 'used-fair', 'used', 'refurbished'])
     .withMessage('Invalid condition value'),
   body('latitude')
-    .optional()
+    .optional({ nullable: true })
     .isFloat({ min: -90, max: 90 }).withMessage('Invalid latitude'),
   body('longitude')
-    .optional()
+    .optional({ nullable: true })
     .isFloat({ min: -180, max: 180 }).withMessage('Invalid longitude'),
   body('pickup_available')
     .optional()
@@ -50,7 +51,7 @@ export const updateProductValidators = [
     .isInt({ min: 0 }).withMessage('Quantity must be 0 or more'),
   body('condition')
     .optional()
-    .isIn(['new', 'used-like-new', 'used-good', 'used-fair'])
+    .isIn(['new', 'used-like-new', 'used-good', 'used-fair', 'used', 'refurbished'])
     .withMessage('Invalid condition value'),
 ];
 

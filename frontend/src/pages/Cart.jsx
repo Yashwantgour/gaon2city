@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate, Link } from 'react-router-dom';
@@ -7,6 +8,31 @@ import EmptyState from '../components/common/EmptyState';
 import { removeFromCart, updateQuantity, clearCart, selectCartTotal, selectCartCount } from '../features/cart/cartSlice';
 import { showToast } from '../features/ui/uiSlice';
 import { formatPrice } from '../utils/helpers';
+
+function CartItemImage({ product }) {
+  const [imgError, setImgError] = useState(false);
+  const firstImg = product?.images?.[0];
+  const imageSource = typeof firstImg === 'string'
+    ? firstImg
+    : (firstImg?.storage_path || product?.storage_path);
+
+  if (!imgError && imageSource) {
+    return (
+      <img
+        src={imageSource}
+        alt={product?.title || 'Product'}
+        className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-cover bg-neutral-100 shrink-0"
+        onError={() => setImgError(true)}
+      />
+    );
+  }
+
+  return (
+    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl bg-neutral-100 flex items-center justify-center text-2xl shrink-0 border border-neutral-100">
+      📦
+    </div>
+  );
+}
 
 export default function Cart() {
   const dispatch = useDispatch();
@@ -60,11 +86,7 @@ export default function Cart() {
                 className="bg-white rounded-2xl border border-neutral-100 p-4 flex gap-4"
               >
                 <Link to={`/product/${item.product.id}`} className="shrink-0">
-                  <img
-                    src={item.product.images?.[0] || ''}
-                    alt={item.product.title}
-                    className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-cover bg-neutral-100"
-                  />
+                  <CartItemImage product={item.product} />
                 </Link>
 
                 <div className="flex-1 min-w-0">

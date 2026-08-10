@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
+import { useState, useEffect } from 'react';
 import {
   HiOutlinePlus,
   HiOutlinePencilSquare,
@@ -14,12 +15,102 @@ import {
 import Button from '../components/common/Button';
 import EmptyState from '../components/common/EmptyState';
 import { formatPrice, getStatusColor, getOrderStatusLabel } from '../utils/helpers';
-import { mockOrders } from '../services/mockData';
+import { listProducts, deleteProduct } from '../services/productsApi';
+import { listOrders } from '../services/ordersApi';
+import { showToast } from '../features/ui/uiSlice';
+
+function SellerProductRow({ product, index, navigate, handleDeleteProduct }) {
+  const [imgError, setImgError] = useState(false);
+  const imageSource = typeof product.images?.[0] === 'string'
+    ? product.images[0]
+    : product.images?.[0]?.storage_path;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 5 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.05 }}
+      className="bg-white rounded-2xl border border-neutral-100 p-4 flex items-center gap-4"
+    >
+      {!imgError && imageSource ? (
+        <img
+          src={imageSource}
+          alt={product.title}
+          className="w-14 h-14 rounded-xl object-cover bg-neutral-100 shrink-0"
+          onError={() => setImgError(true)}
+        />
+      ) : (
+        <div className="w-14 h-14 rounded-xl bg-neutral-100 flex items-center justify-center text-xl shrink-0 border border-neutral-100">
+          📦
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <h3 className="font-medium text-neutral-800 text-sm line-clamp-1">{product.title}</h3>
+        <p className="text-sm font-semibold text-primary-600">{formatPrice(product.price)}</p>
+        <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(product.status)}`}>
+          {product.status}
+        </span>
+      </div>
+      <div className="flex items-center gap-1 shrink-0">
+        <button
+          onClick={() => navigate(`/product/${product.id}`)}
+          className="p-2 rounded-lg text-neutral-400 hover:text-neutral-600 hover:bg-neutral-50 transition-colors"
+          title="View"
+        >
+          <HiOutlineEye className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => navigate(`/edit/${product.id}`)}
+          className="p-2 rounded-lg text-neutral-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+          title="Edit"
+        >
+          <HiOutlinePencilSquare className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => handleDeleteProduct(product.id)}
+          className="p-2 rounded-lg text-neutral-400 hover:text-danger-500 hover:bg-red-50 transition-colors"
+          title="Delete"
+        >
+          <HiOutlineTrash className="w-4 h-4" />
+        </button>
+      </div>
+    </motion.div>
+  );
+}
 
 export default function SellerDashboard() {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const { isAuthenticated, user } = useSelector((state) => state.auth);
-  const products = useSelector((state) => state.products.items);
+
+  const [myProducts, setMyProducts] = useState([]);
+  const [sellerOrders, setSellerOrders] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchDashboardData() {
+      if (!isAuthenticated || !user) return;
+      setIsLoading(true);
+      try {
+        const [prodRes, orderRes] = await Promise.allSettled([
+          listProducts({ limit: 50 }),
+          listOrders({ role: 'seller' }),
+        ]);
+
+        if (prodRes.status === 'fulfilled') {
+          const userProds = (prodRes.value.products || []).filter((p) => p.seller_id === user.id);
+          setMyProducts(userProds);
+        }
+
+        if (orderRes.status === 'fulfilled') {
+          setSellerOrders(orderRes.value.orders || []);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchDashboardData();
+  }, [isAuthenticated, user]);
 
   if (!isAuthenticated) {
     return (
@@ -33,8 +124,18 @@ export default function SellerDashboard() {
     );
   }
 
-  const myProducts = products.filter((p) => p.seller_id === user.id);
-  const sellerOrders = mockOrders;
+  const handleDeleteProduct = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this listing?')) return;
+    try {
+      await deleteProduct(id);
+      setMyProducts((prev) => prev.filter((p) => p.id !== id));
+      dispatch(showToast({ type: 'success', message: 'Product deleted' }));
+    } catch (err) {
+      dispatch(showToast({ type: 'error', message: err?.message || 'Failed to delete' }));
+    }
+  };
+
+  const totalRevenue = sellerOrders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
 
   const stats = [
     {
@@ -51,13 +152,13 @@ export default function SellerDashboard() {
     },
     {
       label: 'Revenue',
-      value: formatPrice(sellerOrders.reduce((sum, o) => sum + o.total_amount, 0)),
+      value: formatPrice(totalRevenue),
       icon: HiOutlineBanknotes,
       color: 'text-green-600 bg-green-50',
     },
     {
-      label: 'Avg. Views',
-      value: '142',
+      label: 'Store Status',
+      value: user?.verification_status === 'verified' ? 'Verified' : 'Active',
       icon: HiOutlineChartBarSquare,
       color: 'text-amber-600 bg-amber-50',
     },
@@ -66,7 +167,6 @@ export default function SellerDashboard() {
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold text-neutral-800">Seller Dashboard</h1>
@@ -77,7 +177,6 @@ export default function SellerDashboard() {
           </Button>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
           {stats.map((stat, i) => (
             <motion.div
@@ -96,10 +195,13 @@ export default function SellerDashboard() {
           ))}
         </div>
 
-        {/* My Listings */}
         <div className="mb-8">
           <h2 className="text-lg font-bold text-neutral-800 mb-4">My Listings</h2>
-          {myProducts.length === 0 ? (
+          {isLoading ? (
+            <div className="bg-white rounded-2xl border border-neutral-100 p-8 text-center">
+              <p className="text-neutral-500 text-sm">Loading listings...</p>
+            </div>
+          ) : myProducts.length === 0 ? (
             <div className="bg-white rounded-2xl border border-neutral-100 p-8 text-center">
               <p className="text-neutral-500 mb-3">You haven&apos;t listed any products yet</p>
               <Button variant="primary" size="sm" onClick={() => navigate('/sell')}>
@@ -109,59 +211,23 @@ export default function SellerDashboard() {
           ) : (
             <div className="space-y-3">
               {myProducts.map((product, i) => (
-                <motion.div
+                <SellerProductRow
                   key={product.id}
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                  className="bg-white rounded-2xl border border-neutral-100 p-4 flex items-center gap-4"
-                >
-                  <img
-                    src={product.images?.[0] || ''}
-                    alt={product.title}
-                    className="w-14 h-14 rounded-xl object-cover bg-neutral-100 shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-neutral-800 text-sm line-clamp-1">{product.title}</h3>
-                    <p className="text-sm font-semibold text-primary-600">{formatPrice(product.price)}</p>
-                    <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(product.status)}`}>
-                      {product.status}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => navigate(`/product/${product.id}`)}
-                      className="p-2 rounded-lg text-neutral-400 hover:text-neutral-600 hover:bg-neutral-50 transition-colors"
-                      title="View"
-                    >
-                      <HiOutlineEye className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => navigate(`/edit/${product.id}`)}
-                      className="p-2 rounded-lg text-neutral-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                      title="Edit"
-                    >
-                      <HiOutlinePencilSquare className="w-4 h-4" />
-                    </button>
-                    <button
-                      className="p-2 rounded-lg text-neutral-400 hover:text-danger-500 hover:bg-red-50 transition-colors"
-                      title="Delete"
-                    >
-                      <HiOutlineTrash className="w-4 h-4" />
-                    </button>
-                  </div>
-                </motion.div>
+                  product={product}
+                  index={i}
+                  navigate={navigate}
+                  handleDeleteProduct={handleDeleteProduct}
+                />
               ))}
             </div>
           )}
         </div>
 
-        {/* Recent Orders */}
         <div>
           <h2 className="text-lg font-bold text-neutral-800 mb-4">Recent Orders</h2>
           {sellerOrders.length === 0 ? (
             <div className="bg-white rounded-2xl border border-neutral-100 p-8 text-center">
-              <p className="text-neutral-500">No orders yet</p>
+              <p className="text-neutral-500">No seller orders yet</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -174,14 +240,12 @@ export default function SellerDashboard() {
                   className="bg-white rounded-2xl border border-neutral-100 p-4 flex items-center justify-between"
                 >
                   <div className="flex items-center gap-3">
-                    <img
-                      src={order.buyer?.avatar_url || ''}
-                      alt=""
-                      className="w-10 h-10 rounded-full object-cover bg-neutral-100"
-                    />
+                    <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center font-bold text-primary-600">
+                      {order.buyer?.name?.charAt(0) || 'B'}
+                    </div>
                     <div>
-                      <p className="font-medium text-neutral-800 text-sm">{order.buyer?.name}</p>
-                      <p className="text-xs text-neutral-500">{order.items.length} item(s) • {order.fulfillment_type}</p>
+                      <p className="font-medium text-neutral-800 text-sm">{order.buyer?.name || 'Buyer'}</p>
+                      <p className="text-xs text-neutral-500">{(order.items || []).length} item(s) • {order.fulfillment_type}</p>
                     </div>
                   </div>
                   <div className="text-right">

@@ -26,16 +26,41 @@ export async function authenticate(req, _res, next) {
     }
 
     // Fetch profile for role info
-    const { data: profile } = await supabaseAdmin
+    let { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('id, name, email, seller_type, verification_status')
       .eq('id', user.id)
       .single();
 
+    // Auto-create profile row if missing
+    if (!profile) {
+      const meta = user.user_metadata || {};
+      const newProf = {
+        id: user.id,
+        email: user.email,
+        name: meta.name || user.email?.split('@')[0] || 'User',
+        phone: meta.phone || null,
+        village: meta.village || null,
+        city: meta.city || null,
+        seller_type: meta.seller_type || 'individual',
+        verification_status: 'unverified',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data: created } = await supabaseAdmin
+        .from('profiles')
+        .upsert(newProf)
+        .select()
+        .single();
+
+      profile = created || newProf;
+    }
+
     req.user = {
+      ...profile,
       id: user.id,
       email: user.email,
-      ...profile,
     };
 
     req.accessToken = token;
@@ -46,8 +71,7 @@ export async function authenticate(req, _res, next) {
 }
 
 /**
- * Optional authentication — does not fail if no token is present,
- * but attaches user if token is valid.
+ * Optional authentication middleware.
  */
 export async function optionalAuth(req, _res, next) {
   try {
@@ -77,9 +101,9 @@ export async function optionalAuth(req, _res, next) {
       .single();
 
     req.user = {
+      ...profile,
       id: user.id,
       email: user.email,
-      ...profile,
     };
 
     req.accessToken = token;
@@ -92,7 +116,6 @@ export async function optionalAuth(req, _res, next) {
 
 /**
  * Require admin role.
- * Must be used AFTER authenticate middleware.
  */
 export function requireAdmin(req, _res, next) {
   if (!req.user || req.user.seller_type !== 'admin') {

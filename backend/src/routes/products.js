@@ -17,6 +17,9 @@ router.get('/', optionalAuth, productsController.listProducts);
 // GET /api/products/nearby — nearby products (public)
 router.get('/nearby', nearbyProductValidators, validate, productsController.getNearbyProducts);
 
+// POST /api/products/upload — upload image to Supabase Storage under <userId>/<fileName>
+router.post('/upload', authenticate, productsController.uploadProductImage);
+
 // GET /api/products/:id — single product (public)
 router.get('/:id', productIdValidator, validate, productsController.getProduct);
 

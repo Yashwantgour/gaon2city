@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { supabase } from './supabase';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -10,10 +11,16 @@ const api = axios.create({
   },
 });
 
-// Request interceptor — attach auth token
 api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('access_token');
+  async (config) => {
+    let token = localStorage.getItem('access_token');
+    if (!token) {
+      const { data } = await supabase.auth.getSession();
+      token = data?.session?.access_token || null;
+      if (token) {
+        localStorage.setItem('access_token', token);
+      }
+    }
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -22,7 +29,6 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor — handle errors
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {

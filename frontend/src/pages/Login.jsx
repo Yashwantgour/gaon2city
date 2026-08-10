@@ -6,8 +6,9 @@ import { HiOutlineEnvelope, HiOutlineLockClosed, HiOutlineEye, HiOutlineEyeSlash
 import { useState } from 'react';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
-import { mockLogin } from '../features/auth/authSlice';
+import { loginStart, loginSuccess, loginFailure } from '../features/auth/authSlice';
 import { showToast } from '../features/ui/uiSlice';
+import { signIn, getMe } from '../services/authApi';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -21,11 +22,19 @@ export default function Login() {
     formState: { errors },
   } = useForm();
 
-  const onSubmit = (data) => {
-    // Mock login for development
-    dispatch(mockLogin());
-    dispatch(showToast({ type: 'success', message: 'Welcome back!' }));
-    navigate('/');
+  const onSubmit = async (data) => {
+    dispatch(loginStart());
+    try {
+      await signIn({ email: data.email, password: data.password });
+      const userProfile = await getMe();
+      dispatch(loginSuccess(userProfile));
+      dispatch(showToast({ type: 'success', message: 'Welcome back!' }));
+      navigate('/');
+    } catch (err) {
+      const msg = err?.message || 'Login failed. Please check your credentials.';
+      dispatch(loginFailure(msg));
+      dispatch(showToast({ type: 'error', message: msg }));
+    }
   };
 
   return (
@@ -36,7 +45,6 @@ export default function Login() {
         transition={{ duration: 0.4 }}
         className="w-full max-w-md"
       >
-        {/* Header */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2 mb-6">
             <div className="w-10 h-10 rounded-xl bg-primary-500 flex items-center justify-center">
@@ -50,7 +58,6 @@ export default function Login() {
           <p className="text-sm text-neutral-500">Sign in to your account to continue</p>
         </div>
 
-        {/* Form */}
         <div className="bg-white rounded-2xl shadow-sm border border-neutral-100 p-6 sm:p-8">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <Input

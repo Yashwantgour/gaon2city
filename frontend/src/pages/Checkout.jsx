@@ -1,29 +1,53 @@
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
-import { selectCartTotal, selectCartCount } from '../features/cart/cartSlice';
+import { useNavigate, Navigate } from 'react-router-dom';
+import { useSelector, useDispatch } from 'react-redux';
+import { selectCartTotal, clearCart } from '../features/cart/cartSlice';
 import Button from '../components/common/Button';
 import { formatPrice } from '../utils/helpers';
 import { HiOutlineArrowLeft, HiOutlineMapPin, HiOutlineTruck } from 'react-icons/hi2';
 import { useState } from 'react';
+import { createOrder } from '../services/ordersApi';
+import { showToast } from '../features/ui/uiSlice';
 
 export default function Checkout() {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const { isAuthenticated, user } = useSelector((state) => state.auth);
   const cartItems = useSelector((state) => state.cart.items);
   const cartTotal = useSelector(selectCartTotal);
-  const cartCount = useSelector(selectCartCount);
   const [fulfillment, setFulfillment] = useState('pickup');
+  const [isPlacing, setIsPlacing] = useState(false);
 
   if (!isAuthenticated) {
-    navigate('/login');
-    return null;
+    return <Navigate to="/login" replace />;
   }
 
   if (cartItems.length === 0) {
-    navigate('/cart');
-    return null;
+    return <Navigate to="/cart" replace />;
   }
+
+  const handlePlaceOrder = async () => {
+    setIsPlacing(true);
+    try {
+      const orderPayload = {
+        items: cartItems.map((i) => ({
+          product_id: i.product.id,
+          quantity: i.quantity,
+        })),
+        fulfillment_type: fulfillment,
+        delivery_location: `${user?.village || ''}, ${user?.city || ''}`,
+      };
+
+      await createOrder(orderPayload);
+      dispatch(clearCart());
+      dispatch(showToast({ type: 'success', message: 'Order placed successfully!' }));
+      navigate('/orders');
+    } catch (err) {
+      dispatch(showToast({ type: 'error', message: err?.message || 'Failed to place order' }));
+    } finally {
+      setIsPlacing(false);
+    }
+  };
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6">
@@ -36,7 +60,6 @@ export default function Checkout() {
         </div>
 
         <div className="space-y-5">
-          {/* Fulfillment */}
           <div className="bg-white rounded-2xl border border-neutral-100 p-5">
             <h3 className="text-sm font-semibold text-neutral-700 mb-3">Fulfillment Method</h3>
             <div className="grid grid-cols-2 gap-3">
@@ -67,7 +90,6 @@ export default function Checkout() {
             </div>
           </div>
 
-          {/* Contact Info */}
           <div className="bg-white rounded-2xl border border-neutral-100 p-5">
             <h3 className="text-sm font-semibold text-neutral-700 mb-3">Contact Information</h3>
             <div className="space-y-2 text-sm">
@@ -86,7 +108,6 @@ export default function Checkout() {
             </div>
           </div>
 
-          {/* Order Summary */}
           <div className="bg-white rounded-2xl border border-neutral-100 p-5">
             <h3 className="text-sm font-semibold text-neutral-700 mb-3">Order Summary</h3>
             <div className="space-y-3">
@@ -111,9 +132,8 @@ export default function Checkout() {
             variant="primary"
             size="xl"
             fullWidth
-            onClick={() => {
-              navigate('/orders');
-            }}
+            isLoading={isPlacing}
+            onClick={handlePlaceOrder}
           >
             Place Order • {formatPrice(cartTotal)}
           </Button>
