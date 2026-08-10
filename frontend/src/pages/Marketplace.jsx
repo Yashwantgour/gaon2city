@@ -310,7 +310,7 @@ export default function Marketplace() {
       )}
 
       {/* Category Pills — horizontal scroll */}
-      <div className="flex gap-2 mb-6 overflow-x-auto hide-scrollbar pb-1">
+      <div className="flex gap-2 mb-6 overflow-x-auto styled-scrollbar scroll-fade pb-2 px-1">
         <button
           onClick={() => setSelectedCategory(null)}
           className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${
