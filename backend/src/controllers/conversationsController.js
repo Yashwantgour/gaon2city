@@ -59,3 +59,15 @@ export async function markMessageRead(req, res, next) {
     next(err);
   }
 }
+
+/**
+ * PATCH /api/conversations/:id/read
+ */
+export async function markConversationRead(req, res, next) {
+  try {
+    const messages = await conversationsService.markConversationRead(req.params.id, req.user.id);
+    res.json({ success: true, updatedCount: messages.length });
+  } catch (err) {
+    next(err);
+  }
+}

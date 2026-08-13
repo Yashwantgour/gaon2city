@@ -16,7 +16,7 @@ import {
   createConversation,
   getMessages,
   sendMessage,
-  markMessageRead,
+  markConversationRead,
 } from '../services/conversationsApi';
 import { getProductById } from '../services/productsApi';
 import { uploadFile } from '../services/storageService';
@@ -39,6 +39,9 @@ export default function Chat() {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [selectedImagePreview, setSelectedImagePreview] = useState(null);
 
+  const selectedConvRef = useRef(null);
+  selectedConvRef.current = selectedConv;
+
   const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -53,7 +56,6 @@ export default function Chat() {
   };
 
   useEffect(() => {
-    // Short timeout to allow new DOM elements to be laid out
     const timeoutId = setTimeout(() => {
       scrollToBottom(true);
     }, 50);
@@ -69,7 +71,6 @@ export default function Chat() {
       const sellerParam = searchParams.get('seller');
       const productParam = searchParams.get('product');
 
-      // If productParam exists but no activeProduct state, fetch product info
       if (productParam && !activeProduct) {
         getProductById(productParam)
           .then((prod) => setActiveProduct(prod))
@@ -82,7 +83,6 @@ export default function Chat() {
         setConversations(convList);
 
         if (sellerParam) {
-          // Check if conversation already exists
           const existing = convList.find(
             (c) =>
               (c.seller_id === sellerParam ||
@@ -94,22 +94,21 @@ export default function Chat() {
 
           if (existing) {
             setSelectedConv(existing);
-            if (existing.product) {
-              setActiveProduct(existing.product);
-            }
+            if (existing.product) setActiveProduct(existing.product);
+            // Mark as read immediately on open
+            markConversationRead(existing.id).catch(() => {});
           } else {
-            // Create a new conversation thread with seller and product context
             try {
               const newConv = await createConversation({
                 seller_id: sellerParam,
                 product_id: productParam || null,
               });
 
-              // Merge route state seller/product info if backend did not join them
               const enrichedConv = {
                 ...newConv,
                 seller: newConv.seller || routeState.seller || (activeProduct ? activeProduct.seller : null),
                 product: newConv.product || routeState.product || activeProduct,
+                unread_count: 0,
               };
 
               setConversations((prev) => [
@@ -117,15 +116,16 @@ export default function Chat() {
                 ...prev.filter((c) => c.id !== enrichedConv.id),
               ]);
               setSelectedConv(enrichedConv);
+              markConversationRead(enrichedConv.id).catch(() => {});
             } catch (err) {
               console.error('Failed to auto-create conversation:', err);
             }
           }
-        } else if (convList.length > 0 && !selectedConv && window.innerWidth >= 640) {
-          setSelectedConv(convList[0]);
-          if (convList[0].product) {
-            setActiveProduct(convList[0].product);
-          }
+        } else if (convList.length > 0 && !selectedConvRef.current && window.innerWidth >= 640) {
+          const firstConv = convList[0];
+          setSelectedConv(firstConv);
+          if (firstConv.product) setActiveProduct(firstConv.product);
+          markConversationRead(firstConv.id).catch(() => {});
         }
       } catch (err) {
         console.error('Error loading conversations:', err);
@@ -138,11 +138,10 @@ export default function Chat() {
     initChat();
   }, [isAuthenticated, searchParams]);
 
-  // Fetch messages for selected conversation
+  // Fetch messages when a conversation is selected
   useEffect(() => {
     if (!selectedConv?.id) return;
 
-    // Update active product if available in selected conversation
     if (selectedConv.product) {
       setActiveProduct(selectedConv.product);
     } else if (selectedConv.product_id && !activeProduct) {
@@ -156,14 +155,13 @@ export default function Chat() {
         const msgList = await getMessages(selectedConv.id);
         setMessages(msgList || []);
 
-        // Mark unread messages as read
-        if (msgList && user?.id) {
-          msgList.forEach((msg) => {
-            if (msg.sender_id !== user.id && !msg.read_at) {
-              markMessageRead(msg.id).catch(() => {});
-            }
-          });
-        }
+        // Mark all unread messages as read
+        markConversationRead(selectedConv.id).catch(() => {});
+
+        // Reset unread count for active conversation in sidebar
+        setConversations((prev) =>
+          prev.map((c) => (c.id === selectedConv.id ? { ...c, unread_count: 0 } : c))
+        );
       } catch (err) {
         console.error('Error fetching messages:', err);
         setMessages([]);
@@ -171,41 +169,91 @@ export default function Chat() {
     }
 
     fetchMsgs();
+  }, [selectedConv?.id]);
 
-    // Supabase Realtime Subscription for instant message delivery
+  // Global Realtime Subscription for all messages (INSERT and UPDATE)
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id) return;
+
     const channel = supabase
-      .channel(`chat:${selectedConv.id}`)
+      .channel('realtime-messages-global')
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
-          filter: `conversation_id=eq.${selectedConv.id}`,
         },
         (payload) => {
           const incomingMsg = payload.new;
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === incomingMsg.id)) return prev;
-            return [...prev, incomingMsg];
-          });
+          const currentSelected = selectedConvRef.current;
 
-          // Mark incoming message as read if active
-          if (incomingMsg.sender_id !== user?.id) {
-            markMessageRead(incomingMsg.id).catch(() => {});
-          }
+          // If message belongs to active conversation
+          if (currentSelected && incomingMsg.conversation_id === currentSelected.id) {
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === incomingMsg.id)) return prev;
+              return [...prev, incomingMsg];
+            });
 
-          // Update conversation list timestamp and preview
-          setConversations((prev) =>
-            prev.map((c) =>
-              c.id === selectedConv.id
-                ? {
-                    ...c,
-                    last_message: incomingMsg.message || 'Photo',
-                    last_message_at: incomingMsg.created_at,
+            // If incoming from other user, auto mark read
+            if (incomingMsg.sender_id !== user.id) {
+              markConversationRead(currentSelected.id).catch(() => {});
+            }
+
+            // Update active conversation in sidebar
+            setConversations((prev) =>
+              prev.map((c) =>
+                c.id === currentSelected.id
+                  ? {
+                      ...c,
+                      last_message: incomingMsg.message || 'Photo',
+                      last_message_at: incomingMsg.created_at,
+                      unread_count: 0,
+                    }
+                  : c
+              )
+            );
+          } else {
+            // Message belongs to another conversation (or no active conversation)
+            setConversations((prev) => {
+              const exists = prev.some((c) => c.id === incomingMsg.conversation_id);
+              if (!exists) {
+                // Refresh full conversation list if brand new conversation
+                listConversations().then((list) => setConversations(list || [])).catch(() => {});
+                return prev;
+              }
+
+              return prev
+                .map((c) => {
+                  if (c.id === incomingMsg.conversation_id) {
+                    const isFromOther = incomingMsg.sender_id !== user.id;
+                    return {
+                      ...c,
+                      last_message: incomingMsg.message || 'Photo',
+                      last_message_at: incomingMsg.created_at,
+                      unread_count: isFromOther ? (c.unread_count || 0) + 1 : (c.unread_count || 0),
+                    };
                   }
-                : c
-            )
+                  return c;
+                })
+                .sort((a, b) => new Date(b.last_message_at) - new Date(a.last_message_at));
+            });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+        },
+        (payload) => {
+          const updatedMsg = payload.new;
+
+          // Update message in active message view (e.g. read_at timestamp updated to show double checks!)
+          setMessages((prev) =>
+            prev.map((m) => (m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m))
           );
         }
       )
@@ -214,7 +262,7 @@ export default function Chat() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedConv?.id, user?.id]);
+  }, [isAuthenticated, user?.id]);
 
   if (!isAuthenticated) {
     return (
@@ -242,6 +290,17 @@ export default function Chat() {
   const currentOtherName = currentOther?.name || (selectedConv?.seller?.name || selectedConv?.buyer?.name) || 'Seller';
   const currentProduct = selectedConv?.product || activeProduct || routeState.product;
 
+  const handleSelectConversation = (conv) => {
+    setSelectedConv(conv);
+    if (conv.product) setActiveProduct(conv.product);
+
+    // Reset unread count locally and in DB
+    setConversations((prev) =>
+      prev.map((c) => (c.id === conv.id ? { ...c, unread_count: 0 } : c))
+    );
+    markConversationRead(conv.id).catch(() => {});
+  };
+
   const handleSend = async () => {
     if ((!messageInput.trim() && !selectedImagePreview) || !selectedConv || isSending) return;
 
@@ -263,18 +322,20 @@ export default function Chat() {
         return [...prev, sent];
       });
 
-      // Update sidebar conversation item
-      setConversations((prev) =>
-        prev.map((c) =>
+      // Update sidebar conversation item & move to top
+      setConversations((prev) => {
+        const updated = prev.map((c) =>
           c.id === selectedConv.id
             ? {
                 ...c,
                 last_message: sent.message || 'Photo',
                 last_message_at: sent.created_at,
+                unread_count: 0,
               }
             : c
-        )
-      );
+        );
+        return updated.sort((a, b) => new Date(b.last_message_at) - new Date(a.last_message_at));
+      });
     } catch (err) {
       console.error('Failed to send message:', err);
     } finally {
@@ -336,11 +397,8 @@ export default function Chat() {
                   return (
                     <button
                       key={conv.id}
-                      onClick={() => {
-                        setSelectedConv(conv);
-                        if (conv.product) setActiveProduct(conv.product);
-                      }}
-                      className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-neutral-50 transition-colors text-left ${
+                      onClick={() => handleSelectConversation(conv)}
+                      className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-neutral-50 transition-colors text-left relative ${
                         isSelected ? 'bg-primary-50/60 border-r-2 border-primary-500' : ''
                       }`}
                     >
@@ -358,21 +416,21 @@ export default function Chat() {
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
-                          <h4 className="text-sm font-semibold text-neutral-800 truncate">
+                          <h4 className={`text-sm truncate ${conv.unread_count > 0 ? 'font-bold text-neutral-900' : 'font-semibold text-neutral-800'}`}>
                             {otherName}
                           </h4>
-                          <span className="text-[10px] text-neutral-400 shrink-0">
+                          <span className={`text-[10px] shrink-0 ${conv.unread_count > 0 ? 'text-primary-600 font-semibold' : 'text-neutral-400'}`}>
                             {formatRelativeTime(conv.last_message_at)}
                           </span>
                         </div>
-                        <p className="text-xs text-neutral-500 truncate mt-0.5">
+                        <p className={`text-xs truncate mt-0.5 ${conv.unread_count > 0 ? 'text-neutral-900 font-medium' : 'text-neutral-500'}`}>
                           {conv.last_message || 'No messages yet'}
                         </p>
                       </div>
 
                       {conv.unread_count > 0 && (
-                        <span className="w-5 h-5 bg-primary-500 text-white rounded-full text-[10px] flex items-center justify-center font-bold shrink-0">
-                          {conv.unread_count}
+                        <span className="min-w-5 h-5 px-1.5 bg-primary-500 text-white rounded-full text-[10px] flex items-center justify-center font-bold shrink-0 shadow-xs animate-pulse">
+                          {conv.unread_count > 99 ? '99+' : conv.unread_count}
                         </span>
                       )}
                     </button>
@@ -433,6 +491,8 @@ export default function Chat() {
                   ) : (
                     messages.map((msg) => {
                       const isMe = msg.sender_id === user?.id;
+                      const isRead = Boolean(msg.read_at);
+
                       return (
                         <motion.div
                           key={msg.id || msg.created_at}
@@ -462,17 +522,24 @@ export default function Chat() {
                             )}
 
                             <div
-                              className={`flex items-center justify-end gap-1 text-[10px] mt-1 ${
+                              className={`flex items-center justify-end gap-1.5 text-[10px] mt-1 ${
                                 isMe ? 'text-primary-100' : 'text-neutral-400'
                               }`}
                             >
                               <span>{formatRelativeTime(msg.created_at)}</span>
                               {isMe && (
-                                <HiCheck
-                                  className={`w-3.5 h-3.5 ${
-                                    msg.read_at ? 'text-white font-bold' : 'opacity-70'
-                                  }`}
-                                />
+                                <span className="inline-flex items-center" title={isRead ? `Read at ${new Date(msg.read_at).toLocaleTimeString()}` : 'Sent'}>
+                                  {isRead ? (
+                                    <span className="flex items-center text-sky-200 font-bold">
+                                      <HiCheck className="w-3.5 h-3.5" />
+                                      <HiCheck className="w-3.5 h-3.5 -ml-2.5" />
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center text-white/75">
+                                      <HiCheck className="w-3.5 h-3.5" />
+                                    </span>
+                                  )}
+                                </span>
                               )}
                             </div>
                           </div>

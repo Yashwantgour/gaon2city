@@ -224,3 +224,38 @@ export async function markMessageRead(messageId, userId) {
 
   return data;
 }
+
+/**
+ * Mark all unread messages in a conversation as read for a recipient.
+ */
+export async function markConversationRead(conversationId, userId) {
+  // Verify participation
+  const { data: conv } = await supabaseAdmin
+    .from('conversations')
+    .select('buyer_id, seller_id')
+    .eq('id', conversationId)
+    .single();
+
+  if (!conv) {
+    throw ApiError.notFound('Conversation not found');
+  }
+
+  if (conv.buyer_id !== userId && conv.seller_id !== userId) {
+    throw ApiError.forbidden('You do not have access to this conversation');
+  }
+
+  // Mark all unread messages from other user as read
+  const { data, error } = await supabaseAdmin
+    .from('messages')
+    .update({ read_at: new Date().toISOString() })
+    .eq('conversation_id', conversationId)
+    .neq('sender_id', userId)
+    .is('read_at', null)
+    .select();
+
+  if (error) {
+    throw ApiError.internal('Failed to mark conversation as read');
+  }
+
+  return data || [];
+}

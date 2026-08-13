@@ -19,3 +19,7 @@ export async function sendMessage(conversationId, messageData) {
 export async function markMessageRead(messageId) {
   return await api.patch(`/conversations/messages/${messageId}/read`);
 }
+
+export async function markConversationRead(conversationId) {
+  return await api.patch(`/conversations/${conversationId}/read`);
+}

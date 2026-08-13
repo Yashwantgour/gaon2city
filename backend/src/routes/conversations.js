@@ -26,6 +26,9 @@ router.get('/:id/messages', conversationIdValidator, validate, conversationsCont
 // POST /api/conversations/:id/messages — send message
 router.post('/:id/messages', sendMessageValidators, validate, conversationsController.sendMessage);
 
+// PATCH /api/conversations/:id/read — mark all unread messages in conversation as read
+router.patch('/:id/read', conversationIdValidator, validate, conversationsController.markConversationRead);
+
 // PATCH /api/messages/:id/read — mark message as read
 // Note: This is mounted here but the path is /messages/:id/read
 router.patch('/messages/:id/read', messageIdValidator, validate, conversationsController.markMessageRead);
