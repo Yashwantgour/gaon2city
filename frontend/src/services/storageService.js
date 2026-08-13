@@ -1,16 +1,12 @@
 import api from './api';
 
 /**
- * Compress an image file using HTML Canvas to reduce base64 size (800px max width, 0.75 JPEG quality).
+ * Compress an image file using HTML Canvas (800px max width, 0.80 JPEG quality) before uploading.
  */
-async function compressImageFile(file, maxWidth = 800, quality = 0.75) {
-  return new Promise((resolve) => {
+export async function compressImageFile(file, maxWidth = 1200, quality = 0.80) {
+  return new Promise((resolve, reject) => {
     if (!file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => resolve('');
-      reader.readAsDataURL(file);
-      return;
+      return reject(new Error('Selected file is not an image'));
     }
 
     const img = new Image();
@@ -33,33 +29,29 @@ async function compressImageFile(file, maxWidth = 800, quality = 0.75) {
       resolve(canvas.toDataURL('image/jpeg', quality));
     };
     img.onerror = () => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => resolve('');
-      reader.readAsDataURL(file);
+      URL.revokeObjectURL(url);
+      reject(new Error('Failed to process image file'));
     };
     img.src = url;
   });
 }
 
 /**
- * Upload a file via Backend Admin Service to Supabase Storage.
- * If backend storage is unavailable or .env credentials are missing, falls back to compressed Base64 Data URL.
+ * Upload an image file to Supabase Storage via Backend API.
+ * Strict Production Rule: Must fail explicitly if Supabase Storage is unavailable.
+ * Never stores or returns a permanent base64 data URL.
  */
 export async function uploadFile(file) {
   const compressedBase64 = await compressImageFile(file);
 
-  try {
-    const res = await api.post('/products/upload', {
-      image: compressedBase64,
-      name: file.name,
-    });
-    if (res && res.url) {
-      return res.url;
-    }
-  } catch (err) {
-    console.warn('Storage upload API call failed, falling back to compressed base64 data URL:', err?.message || err);
+  const res = await api.post('/products/upload', {
+    image: compressedBase64,
+    name: file.name,
+  });
+
+  if (!res || !res.url) {
+    throw new Error('Image upload failed. Storage did not return an object URL.');
   }
 
-  return compressedBase64;
+  return res.url;
 }
