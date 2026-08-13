@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import {
@@ -46,23 +46,23 @@ export default function Chat() {
   const fileInputRef = useRef(null);
 
   // Auto-scroll ONLY the chat messages container to the bottom (never scrolls the main window)
-  const scrollToBottom = (smooth = true) => {
+  const scrollToBottom = useCallback((smooth = true) => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTo({
         top: messagesContainerRef.current.scrollHeight,
         behavior: smooth ? 'smooth' : 'auto',
       });
     }
-  };
+  }, []);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       scrollToBottom(true);
     }, 50);
     return () => clearTimeout(timeoutId);
-  }, [messages]);
+  }, [messages, scrollToBottom]);
 
-  // Load conversation list and handle deep linking from query params (?seller=...&product=...)
+  // Load conversation list and handle explicit deep linking from query params (?seller=...&product=...)
   useEffect(() => {
     async function initChat() {
       if (!isAuthenticated) return;
@@ -82,6 +82,7 @@ export default function Chat() {
         convList = convList || [];
         setConversations(convList);
 
+        // ONLY auto-select if seller query param was explicitly passed (e.g. from "Chat Seller" button)
         if (sellerParam) {
           const existing = convList.find(
             (c) =>
@@ -95,7 +96,6 @@ export default function Chat() {
           if (existing) {
             setSelectedConv(existing);
             if (existing.product) setActiveProduct(existing.product);
-            // Mark as read immediately on open
             markConversationRead(existing.id).catch(() => {});
           } else {
             try {
@@ -121,12 +121,9 @@ export default function Chat() {
               console.error('Failed to auto-create conversation:', err);
             }
           }
-        } else if (convList.length > 0 && !selectedConvRef.current && window.innerWidth >= 640) {
-          const firstConv = convList[0];
-          setSelectedConv(firstConv);
-          if (firstConv.product) setActiveProduct(firstConv.product);
-          markConversationRead(firstConv.id).catch(() => {});
         }
+        // Note: When no query parameter is provided, we intentionally do NOT auto-select
+        // the first conversation so the user sees unread badges and explicitly clicks to open.
       } catch (err) {
         console.error('Error loading conversations:', err);
         setConversations([]);
@@ -138,7 +135,7 @@ export default function Chat() {
     initChat();
   }, [isAuthenticated, searchParams]);
 
-  // Fetch messages when a conversation is selected
+  // Fetch messages when a conversation is explicitly selected
   useEffect(() => {
     if (!selectedConv?.id) return;
 
@@ -155,10 +152,10 @@ export default function Chat() {
         const msgList = await getMessages(selectedConv.id);
         setMessages(msgList || []);
 
-        // Mark all unread messages as read
+        // Mark all unread messages as read in this conversation
         markConversationRead(selectedConv.id).catch(() => {});
 
-        // Reset unread count for active conversation in sidebar
+        // Reset unread count for this active conversation in sidebar
         setConversations((prev) =>
           prev.map((c) => (c.id === selectedConv.id ? { ...c, unread_count: 0 } : c))
         );
@@ -170,6 +167,26 @@ export default function Chat() {
 
     fetchMsgs();
   }, [selectedConv?.id]);
+
+  // Listen to window focus to mark open conversation as read when returning to tab
+  useEffect(() => {
+    function handleWindowFocus() {
+      if (selectedConvRef.current?.id && user?.id) {
+        markConversationRead(selectedConvRef.current.id).catch(() => {});
+      }
+    }
+
+    window.addEventListener('focus', handleWindowFocus);
+    const handleVisibility = () => {
+      if (!document.hidden) handleWindowFocus();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [user?.id]);
 
   // Global Realtime Subscription for all messages (INSERT and UPDATE)
   useEffect(() => {
@@ -188,16 +205,18 @@ export default function Chat() {
           const incomingMsg = payload.new;
           const currentSelected = selectedConvRef.current;
 
-          // If message belongs to active conversation
+          // Check if message belongs to the conversation currently active on screen
           if (currentSelected && incomingMsg.conversation_id === currentSelected.id) {
             setMessages((prev) => {
               if (prev.some((m) => m.id === incomingMsg.id)) return prev;
               return [...prev, incomingMsg];
             });
 
-            // If incoming from other user, auto mark read
+            // If incoming from another user and window has active focus, mark as read
             if (incomingMsg.sender_id !== user.id) {
-              markConversationRead(currentSelected.id).catch(() => {});
+              if (document.hasFocus() && !document.hidden) {
+                markConversationRead(currentSelected.id).catch(() => {});
+              }
             }
 
             // Update active conversation in sidebar
@@ -214,19 +233,20 @@ export default function Chat() {
               )
             );
           } else {
-            // Message belongs to another conversation (or no active conversation)
+            // Message belongs to an inactive conversation (or recipient has no conversation open)
             setConversations((prev) => {
               const exists = prev.some((c) => c.id === incomingMsg.conversation_id);
               if (!exists) {
-                // Refresh full conversation list if brand new conversation
+                // Fetch full conversation list if this is a newly created conversation
                 listConversations().then((list) => setConversations(list || [])).catch(() => {});
                 return prev;
               }
 
+              const isFromOther = incomingMsg.sender_id !== user.id;
+
               return prev
                 .map((c) => {
                   if (c.id === incomingMsg.conversation_id) {
-                    const isFromOther = incomingMsg.sender_id !== user.id;
                     return {
                       ...c,
                       last_message: incomingMsg.message || 'Photo',
@@ -251,7 +271,7 @@ export default function Chat() {
         (payload) => {
           const updatedMsg = payload.new;
 
-          // Update message in active message view (e.g. read_at timestamp updated to show double checks!)
+          // Realtime update of message state (e.g. read_at timestamp updated to show double checks in sender view)
           setMessages((prev) =>
             prev.map((m) => (m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m))
           );
@@ -294,7 +314,7 @@ export default function Chat() {
     setSelectedConv(conv);
     if (conv.product) setActiveProduct(conv.product);
 
-    // Reset unread count locally and in DB
+    // Reset unread count locally and in database
     setConversations((prev) =>
       prev.map((c) => (c.id === conv.id ? { ...c, unread_count: 0 } : c))
     );
@@ -393,16 +413,21 @@ export default function Chat() {
                   const other = getOtherParticipant(conv);
                   const otherName = other?.name || (conv.seller?.name || conv.buyer?.name) || 'User';
                   const isSelected = selectedConv?.id === conv.id;
+                  const hasUnread = conv.unread_count > 0;
 
                   return (
                     <button
                       key={conv.id}
                       onClick={() => handleSelectConversation(conv)}
                       className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-neutral-50 transition-colors text-left relative ${
-                        isSelected ? 'bg-primary-50/60 border-r-2 border-primary-500' : ''
+                        isSelected
+                          ? 'bg-primary-50/60 border-r-2 border-primary-500'
+                          : hasUnread
+                          ? 'bg-primary-50/20'
+                          : ''
                       }`}
                     >
-                      <div className="w-11 h-11 rounded-full bg-primary-100 flex items-center justify-center font-bold text-primary-600 shrink-0 overflow-hidden">
+                      <div className="w-11 h-11 rounded-full bg-primary-100 flex items-center justify-center font-bold text-primary-600 shrink-0 overflow-hidden relative">
                         {other?.avatar_url ? (
                           <img
                             src={other.avatar_url}
@@ -412,24 +437,39 @@ export default function Chat() {
                         ) : (
                           otherName.charAt(0).toUpperCase()
                         )}
+                        {hasUnread && (
+                          <span className="absolute top-0 right-0 w-3 h-3 bg-primary-500 border-2 border-white rounded-full" />
+                        )}
                       </div>
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
-                          <h4 className={`text-sm truncate ${conv.unread_count > 0 ? 'font-bold text-neutral-900' : 'font-semibold text-neutral-800'}`}>
+                          <h4
+                            className={`text-sm truncate ${
+                              hasUnread ? 'font-bold text-neutral-900' : 'font-semibold text-neutral-800'
+                            }`}
+                          >
                             {otherName}
                           </h4>
-                          <span className={`text-[10px] shrink-0 ${conv.unread_count > 0 ? 'text-primary-600 font-semibold' : 'text-neutral-400'}`}>
+                          <span
+                            className={`text-[10px] shrink-0 ${
+                              hasUnread ? 'text-primary-600 font-bold' : 'text-neutral-400'
+                            }`}
+                          >
                             {formatRelativeTime(conv.last_message_at)}
                           </span>
                         </div>
-                        <p className={`text-xs truncate mt-0.5 ${conv.unread_count > 0 ? 'text-neutral-900 font-medium' : 'text-neutral-500'}`}>
+                        <p
+                          className={`text-xs truncate mt-0.5 ${
+                            hasUnread ? 'text-neutral-900 font-semibold' : 'text-neutral-500'
+                          }`}
+                        >
                           {conv.last_message || 'No messages yet'}
                         </p>
                       </div>
 
-                      {conv.unread_count > 0 && (
-                        <span className="min-w-5 h-5 px-1.5 bg-primary-500 text-white rounded-full text-[10px] flex items-center justify-center font-bold shrink-0 shadow-xs animate-pulse">
+                      {hasUnread && (
+                        <span className="min-w-5 h-5 px-1.5 bg-primary-500 text-white rounded-full text-[10px] flex items-center justify-center font-bold shrink-0 shadow-xs">
                           {conv.unread_count > 99 ? '99+' : conv.unread_count}
                         </span>
                       )}
@@ -528,15 +568,22 @@ export default function Chat() {
                             >
                               <span>{formatRelativeTime(msg.created_at)}</span>
                               {isMe && (
-                                <span className="inline-flex items-center" title={isRead ? `Read at ${new Date(msg.read_at).toLocaleTimeString()}` : 'Sent'}>
+                                <span
+                                  className="inline-flex items-center ml-0.5"
+                                  title={
+                                    isRead
+                                      ? `Read at ${new Date(msg.read_at).toLocaleTimeString()}`
+                                      : 'Sent (Unread)'
+                                  }
+                                >
                                   {isRead ? (
                                     <span className="flex items-center text-sky-200 font-bold">
-                                      <HiCheck className="w-3.5 h-3.5" />
-                                      <HiCheck className="w-3.5 h-3.5 -ml-2.5" />
+                                      <HiCheck className="w-3.5 h-3.5 stroke-[2.5]" />
+                                      <HiCheck className="w-3.5 h-3.5 stroke-[2.5] -ml-2" />
                                     </span>
                                   ) : (
-                                    <span className="flex items-center text-white/75">
-                                      <HiCheck className="w-3.5 h-3.5" />
+                                    <span className="flex items-center text-white/70">
+                                      <HiCheck className="w-3.5 h-3.5 stroke-[2]" />
                                     </span>
                                   )}
                                 </span>
