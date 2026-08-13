@@ -1,35 +1,40 @@
 # Project State: Gaon2City
 
 **Last Updated:** 2026-08-14  
-**Current Status:** Documentation ingested, codebase mapped, and planning baseline established.
+**Current Status:** Phase 6 (Direct Messaging & Realtime Chat) planned and ready for execution.
 
 ---
 
 ## 📊 Milestone Progress
 
 - **Milestone 1 (Core Hyperlocal Marketplace):** Complete (Phases 0–5 implemented and functional in code).
-- **Milestone 2 (Realtime & External Services):** In Progress (Phases 6–8 scaffolded, pending realtime/live keys integration).
-- **Milestone 3 (Trust, Quality & Hardening):** Phase 9 complete; Phase 10 (Testing & CI/CD) pending.
+- **Milestone 2 (Realtime & External Services):** In Progress
+  - Phase 6: Direct Messaging & Realtime Chat — **Planned (PLAN.md ready)**
+  - Phase 7: Mapbox Directions & Navigation — Queued
+  - Phase 8: Payment Gateway (Razorpay) — Queued
+- **Milestone 3 (Trust, Quality & Hardening):** Phase 9 complete; Phase 10 (Testing & CI/CD) queued.
 
 ---
 
 ## 🎯 Active Focus
 
-- **Current Goal:** Transition from MVP scaffolding to full interactive services (Realtime Chat in Phase 6, Mapbox Navigation in Phase 7, or Automated Testing in Phase 10).
-- **Next Phase:** Phase 6 (Direct Messaging & Realtime Chat) or Phase 7 (Mapbox Navigation).
+- **Active Plan:** [.planning/phases/06-direct-messaging-realtime-chat/PLAN.md](file:///c:/Users/HP/OneDrive/Desktop/gaon2city/.planning/phases/06-direct-messaging-realtime-chat/PLAN.md)
+- **Execution Waves:**
+  - Wave 1: Contextual Navigation & Initiation (ProductDetails -> Chat route state)
+  - Wave 2: Realtime Subscriptions & Unread Badges
+  - Wave 3: Image Attachments & UX Polish
 
 ---
 
 ## 🔒 Key Decisions Log
 
-1. **Supabase as Unified Backend Engine:** Supabase handles PostgreSQL, Auth, and Storage. Service-role keys are strictly kept server-side.
-2. **Database-Level Geospatial Queries:** PostGIS queries (`ST_DWithin`, `ST_Distance`) are executed server-side to prevent client-side performance degradation.
-3. **Layered Express Architecture:** Every API endpoint is protected by express-validator, custom `ApiError` class, and global error handling.
-4. **Redux Toolkit + Tailwind v4 Frontend:** Feature-based slice architecture for predictable UI state management and high-performance styling.
+1. **Supabase Realtime Channel:** Postgres change event listeners on `messages` table rather than introducing separate WebSocket infrastructure.
+2. **Contextual Deep Linking:** `/chat?seller=<id>&product=<id>` URL parameters dynamically bootstrap direct buyer-seller threads.
+3. **Database-Level Geospatial Queries:** PostGIS queries (`ST_DWithin`, `ST_Distance`) executed server-side.
+4. **Layered Express Architecture:** Every API endpoint protected by express-validator, custom `ApiError`, and global error handling.
 
 ---
 
-## ⚠️ Known Blockers & Next Actions
+## ⚠️ Next Action
 
-- **Testing:** Automated tests need to be introduced (Phase 10 / `gsd-add-tests`).
-- **External Credentials:** Mapbox (`MAPBOX_TOKEN`) and Razorpay (`RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`) are required for live map routing and live payments.
+Run `/gsd-execute-phase 6` to execute the planned tasks.
