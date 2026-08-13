@@ -137,10 +137,12 @@ export default function ReviewList({
                 </div>
               </div>
 
-              {rev.review && (
-                <p className="text-xs text-neutral-700 leading-relaxed pl-10">
-                  {rev.review}
-                </p>
+              {(rev.review || rev.comment || rev.message || rev.content) && (
+                <div className="mt-2 pl-10">
+                  <p className="text-xs text-neutral-700 leading-relaxed bg-white p-3 rounded-xl border border-neutral-100/80 shadow-2xs">
+                    "{rev.review || rev.comment || rev.message || rev.content}"
+                  </p>
+                </div>
               )}
             </motion.div>
           ))
