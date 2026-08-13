@@ -15,6 +15,7 @@ import Profile from './pages/Profile';
 import SellerDashboard from './pages/SellerDashboard';
 import AddProduct from './pages/AddProduct';
 import Chat from './pages/Chat';
+import Directions from './pages/Directions';
 import AdminDashboard from './pages/AdminDashboard';
 import NotFound from './pages/NotFound';
 import { supabase } from './services/supabase';
@@ -80,6 +81,7 @@ function AppRoutes() {
           <Route path="/seller/dashboard" element={<SellerDashboard />} />
           <Route path="/sell" element={<AddProduct />} />
           <Route path="/chat" element={<Chat />} />
+          <Route path="/directions" element={<Directions />} />
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/*" element={<NotFound />} />
         </Route>

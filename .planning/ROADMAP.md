@@ -46,7 +46,7 @@
   - Supabase Realtime channel subscriptions for instant message delivery and unread indicators.
   - Media/image attachments in chat threads.
 
-- [ ] **Phase 7 — Mapbox Directions & Navigation**
+- [x] **Phase 7 — Mapbox Directions & Navigation**
   - "Go to Seller" routing integration using server-side Mapbox API proxy.
   - Turn-by-turn route visualization, distance readout, and driving/walking ETA display.
   - Interactive map markers for rural producers on the marketplace.

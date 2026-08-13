@@ -8,8 +8,11 @@ import {
   HiOutlineMapPin,
   HiOutlineXMark,
   HiChevronDown,
+  HiOutlineSquares2X2,
+  HiOutlineMap,
 } from 'react-icons/hi2';
 import ProductGrid from '../components/product/ProductGrid';
+import MarketplaceMap from '../components/map/MarketplaceMap';
 import { CATEGORIES, CONDITIONS, SELLER_TYPES, RADIUS_OPTIONS, SORT_OPTIONS } from '../utils/constants';
 import { setProducts, setLoading, setError } from '../features/products/productsSlice';
 import useLocation from '../hooks/useLocation';
@@ -26,6 +29,7 @@ export default function Marketplace() {
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
   const [showFilters, setShowFilters] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'map'
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || null);
@@ -47,19 +51,25 @@ export default function Marketplace() {
           });
           let filtered = nearby || [];
           if (debouncedSearch) {
-            filtered = filtered.filter(p => p.title?.toLowerCase().includes(debouncedSearch.toLowerCase()) || p.description?.toLowerCase().includes(debouncedSearch.toLowerCase()));
+            filtered = filtered.filter(
+              (p) =>
+                p.title?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+                p.description?.toLowerCase().includes(debouncedSearch.toLowerCase())
+            );
           }
           if (selectedCategory) {
-            filtered = filtered.filter(p => p.category?.slug === selectedCategory || p.category_id === selectedCategory);
+            filtered = filtered.filter(
+              (p) => p.category?.slug === selectedCategory || p.category_id === selectedCategory
+            );
           }
           if (selectedCondition) {
-            filtered = filtered.filter(p => p.condition === selectedCondition);
+            filtered = filtered.filter((p) => p.condition === selectedCondition);
           }
           if (priceMin) {
-            filtered = filtered.filter(p => Number(p.price) >= Number(priceMin));
+            filtered = filtered.filter((p) => Number(p.price) >= Number(priceMin));
           }
           if (priceMax) {
-            filtered = filtered.filter(p => Number(p.price) <= Number(priceMax));
+            filtered = filtered.filter((p) => Number(p.price) <= Number(priceMax));
           }
           dispatch(setProducts(filtered));
         } else {
@@ -69,7 +79,12 @@ export default function Marketplace() {
             condition: selectedCondition || undefined,
             minPrice: priceMin || undefined,
             maxPrice: priceMax || undefined,
-            sort: selectedSort === 'price_low' ? 'price-low' : selectedSort === 'price_high' ? 'price-high' : 'newest',
+            sort:
+              selectedSort === 'price_low'
+                ? 'price-low'
+                : selectedSort === 'price_high'
+                ? 'price-high'
+                : 'newest',
           });
           dispatch(setProducts(res.products || []));
         }
@@ -81,9 +96,27 @@ export default function Marketplace() {
       }
     }
     fetchFilteredProducts();
-  }, [dispatch, debouncedSearch, selectedCategory, selectedCondition, selectedSellerType, priceMin, priceMax, selectedSort, latitude, longitude, radius]);
+  }, [
+    dispatch,
+    debouncedSearch,
+    selectedCategory,
+    selectedCondition,
+    selectedSellerType,
+    priceMin,
+    priceMax,
+    selectedSort,
+    latitude,
+    longitude,
+    radius,
+  ]);
 
-  const activeFilterCount = [selectedCategory, selectedCondition, selectedSellerType, priceMin, priceMax].filter(Boolean).length;
+  const activeFilterCount = [
+    selectedCategory,
+    selectedCondition,
+    selectedSellerType,
+    priceMin,
+    priceMax,
+  ].filter(Boolean).length;
 
   const handleClearFilters = () => {
     setSelectedCategory(null);
@@ -99,14 +132,43 @@ export default function Marketplace() {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-6"
+        className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
       >
-        <h1 className="text-2xl font-bold text-neutral-800 mb-1">Marketplace</h1>
-        <p className="text-sm text-neutral-500">
-          Discover products from sellers near you
-        </p>
+        <div>
+          <h1 className="text-2xl font-bold text-neutral-800 mb-1">Marketplace</h1>
+          <p className="text-sm text-neutral-500">
+            Discover fresh produce and handmade goods from rural producers
+          </p>
+        </div>
+
+        {/* View Mode Switcher (Grid vs Map) */}
+        <div className="flex items-center gap-1 p-1 bg-neutral-100 rounded-xl self-start sm:self-auto border border-neutral-200/60">
+          <button
+            onClick={() => setViewMode('grid')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              viewMode === 'grid'
+                ? 'bg-white text-primary-600 shadow-xs'
+                : 'text-neutral-600 hover:text-neutral-900'
+            }`}
+          >
+            <HiOutlineSquares2X2 className="w-4 h-4" />
+            <span>Grid</span>
+          </button>
+          <button
+            onClick={() => setViewMode('map')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              viewMode === 'map'
+                ? 'bg-white text-primary-600 shadow-xs'
+                : 'text-neutral-600 hover:text-neutral-900'
+            }`}
+          >
+            <HiOutlineMap className="w-4 h-4" />
+            <span>Map View</span>
+          </button>
+        </div>
       </motion.div>
 
+      {/* Search & Filter Bar */}
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
         <div className="relative flex-1">
           <HiOutlineMagnifyingGlass className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
@@ -177,32 +239,30 @@ export default function Marketplace() {
         </button>
       </div>
 
+      {/* Radius Quick Selector */}
       <div className="flex flex-wrap items-center gap-2 mb-6">
-        <button
-          onClick={requestLocation}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-50 text-primary-700 text-sm font-medium hover:bg-primary-100 transition-colors"
-        >
-          <HiOutlineMapPin className="w-4 h-4" />
-          {locationName || 'Set Location'}
-        </button>
-
+        <span className="text-xs font-medium text-neutral-500 flex items-center gap-1">
+          <HiOutlineMapPin className="w-3.5 h-3.5 text-primary-500" />
+          Radius:
+        </span>
         <div className="flex gap-1.5">
-          {RADIUS_OPTIONS.map((option) => (
+          {RADIUS_OPTIONS.map((r) => (
             <button
-              key={option.label}
-              onClick={() => changeRadius(option.value)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                radius === option.value
-                  ? 'bg-primary-500 text-white'
-                  : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+              key={r}
+              onClick={() => changeRadius(r)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                radius === r
+                  ? 'bg-primary-500 text-white shadow-xs'
+                  : 'bg-white text-neutral-600 border border-neutral-200 hover:border-neutral-300'
               }`}
             >
-              {option.label}
+              {r} km
             </button>
           ))}
         </div>
       </div>
 
+      {/* Filter Drawer */}
       {showFilters && (
         <motion.div
           initial={{ opacity: 0, height: 0 }}
@@ -287,6 +347,7 @@ export default function Marketplace() {
         </motion.div>
       )}
 
+      {/* Category Pills */}
       <div className="flex gap-2 mb-6 overflow-x-auto styled-scrollbar scroll-fade pb-2 px-1">
         <button
           onClick={() => setSelectedCategory(null)}
@@ -320,7 +381,17 @@ export default function Marketplace() {
         </p>
       </div>
 
-      <ProductGrid products={products} isLoading={isLoading} />
+      {/* Main View: Grid vs Interactive Map */}
+      {viewMode === 'map' ? (
+        <MarketplaceMap
+          products={products}
+          userLocation={{ latitude, longitude }}
+          radius={radius}
+          className="h-[580px] w-full"
+        />
+      ) : (
+        <ProductGrid products={products} isLoading={isLoading} />
+      )}
     </div>
   );
 }

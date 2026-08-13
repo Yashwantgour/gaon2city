@@ -5,14 +5,20 @@ import * as mapService from '../services/mapService.js';
  */
 export async function getRoute(req, res, next) {
   try {
-    const result = await mapService.getRoute({
-      originLat: req.query.originLat,
-      originLng: req.query.originLng,
-      destLat: req.query.destLat,
-      destLng: req.query.destLng,
-      profile: req.query.profile,
-    });
-    res.json(result);
+    const route = await mapService.getRoute(req.query);
+    res.json(route);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/map/config
+ */
+export async function getMapConfig(req, res, next) {
+  try {
+    const config = mapService.getMapConfig();
+    res.json(config);
   } catch (err) {
     next(err);
   }

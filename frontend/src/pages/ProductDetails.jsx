@@ -109,6 +109,28 @@ export default function ProductDetails() {
     });
   };
 
+  const handleGoToSeller = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    const sellerId =
+      activeProduct?.seller_id ||
+      activeProduct?.seller?.id ||
+      (typeof activeProduct?.seller === 'string' ? activeProduct.seller : null);
+
+    const targetUrl = sellerId
+      ? `/directions?seller=${sellerId}&product=${activeProduct?.id || id}`
+      : `/directions?product=${activeProduct?.id || id}`;
+
+    navigate(targetUrl, {
+      state: {
+        seller: activeProduct?.seller || null,
+        product: activeProduct || null,
+      },
+    });
+  };
+
   const nextImage = () => setCurrentImage((prev) => (prev + 1) % displayImages.length);
   const prevImage = () => setCurrentImage((prev) => (prev - 1 + displayImages.length) % displayImages.length);
 
@@ -316,6 +338,7 @@ export default function ProductDetails() {
               type="button"
               icon={<HiOutlineMapPin />}
               className="flex-1"
+              onClick={handleGoToSeller}
             >
               Go to Seller
             </Button>
