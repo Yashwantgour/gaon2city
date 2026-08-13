@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   HiOutlineMagnifyingGlass,
   HiOutlineShoppingCart,
@@ -13,6 +13,7 @@ import {
   HiOutlineChatBubbleLeftRight,
 } from 'react-icons/hi2';
 import { selectCartCount } from '../../features/cart/cartSlice';
+import { listConversations } from '../../services/conversationsApi';
 import Button from '../common/Button';
 
 export default function Navbar() {
@@ -22,6 +23,25 @@ export default function Navbar() {
   const cartCount = useSelector(selectCartCount);
   const { locationName, radius } = useSelector((state) => state.location);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [unreadMsgCount, setUnreadMsgCount] = useState(0);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    async function checkUnread() {
+      try {
+        const convs = await listConversations();
+        if (convs) {
+          const total = convs.reduce((sum, c) => sum + (c.unread_count || 0), 0);
+          setUnreadMsgCount(total);
+        }
+      } catch {
+        // silent catch
+      }
+    }
+    checkUnread();
+    const interval = setInterval(checkUnread, 4000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
 
   return (
     <nav className="sticky top-0 z-40 glass border-b border-neutral-200/60">
@@ -84,6 +104,15 @@ export default function Navbar() {
                 aria-label="Messages"
               >
                 <HiOutlineChatBubbleLeftRight className="w-5 h-5" />
+                {unreadMsgCount > 0 && (
+                  <motion.span
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="absolute -top-0.5 -right-0.5 min-w-5 h-5 px-1 bg-primary-500 text-white rounded-full text-[10px] flex items-center justify-center font-bold shadow-xs"
+                  >
+                    {unreadMsgCount > 9 ? '9+' : unreadMsgCount}
+                  </motion.span>
+                )}
               </button>
             )}
 

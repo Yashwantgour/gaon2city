@@ -122,8 +122,6 @@ export default function Chat() {
             }
           }
         }
-        // Note: When no query parameter is provided, we intentionally do NOT auto-select
-        // the first conversation so the user sees unread badges and explicitly clicks to open.
       } catch (err) {
         console.error('Error loading conversations:', err);
         setConversations([]);
@@ -188,99 +186,123 @@ export default function Chat() {
     };
   }, [user?.id]);
 
-  // Global Realtime Subscription for all messages (INSERT and UPDATE)
+  // Global Realtime Subscription & 3s Sync Poller
   useEffect(() => {
     if (!isAuthenticated || !user?.id) return;
 
+    const channelName = `realtime-chat-user-${user.id}-${Date.now()}`;
     const channel = supabase
-      .channel('realtime-messages-global')
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
           table: 'messages',
         },
         (payload) => {
-          const incomingMsg = payload.new;
-          const currentSelected = selectedConvRef.current;
+          const eventType = payload.eventType;
 
-          // Check if message belongs to the conversation currently active on screen
-          if (currentSelected && incomingMsg.conversation_id === currentSelected.id) {
-            setMessages((prev) => {
-              if (prev.some((m) => m.id === incomingMsg.id)) return prev;
-              return [...prev, incomingMsg];
-            });
+          if (eventType === 'INSERT') {
+            const newMsg = payload.new;
+            const currentSelected = selectedConvRef.current;
 
-            // If incoming from another user and window has active focus, mark as read
-            if (incomingMsg.sender_id !== user.id) {
-              if (document.hasFocus() && !document.hidden) {
-                markConversationRead(currentSelected.id).catch(() => {});
+            // Case A: Message belongs to currently open conversation
+            if (currentSelected && newMsg.conversation_id === currentSelected.id) {
+              setMessages((prev) => {
+                if (prev.some((m) => m.id === newMsg.id)) return prev;
+                return [...prev, newMsg];
+              });
+
+              // If from other user and window is focused, mark read immediately
+              if (newMsg.sender_id !== user.id) {
+                if (document.hasFocus() && !document.hidden) {
+                  markConversationRead(currentSelected.id).catch(() => {});
+                }
               }
-            }
 
-            // Update active conversation in sidebar
-            setConversations((prev) =>
-              prev.map((c) =>
-                c.id === currentSelected.id
-                  ? {
-                      ...c,
-                      last_message: incomingMsg.message || 'Photo',
-                      last_message_at: incomingMsg.created_at,
-                      unread_count: 0,
+              // Update active conversation in sidebar
+              setConversations((prev) => {
+                return prev
+                  .map((c) =>
+                    c.id === currentSelected.id
+                      ? {
+                          ...c,
+                          last_message: newMsg.message || 'Photo',
+                          last_message_at: newMsg.created_at,
+                          unread_count: 0,
+                        }
+                      : c
+                  )
+                  .sort((a, b) => new Date(b.last_message_at || b.updated_at) - new Date(a.last_message_at || a.updated_at));
+              });
+            } else {
+              // Case B: Message belongs to another conversation (or no conversation selected)
+              setConversations((prev) => {
+                const exists = prev.some((c) => c.id === newMsg.conversation_id);
+                if (!exists) {
+                  // If new conversation, reload conversation list
+                  listConversations().then((list) => setConversations(list || [])).catch(() => {});
+                  return prev;
+                }
+
+                const isFromOther = newMsg.sender_id !== user.id;
+
+                return prev
+                  .map((c) => {
+                    if (c.id === newMsg.conversation_id) {
+                      return {
+                        ...c,
+                        last_message: newMsg.message || 'Photo',
+                        last_message_at: newMsg.created_at,
+                        unread_count: isFromOther ? (c.unread_count || 0) + 1 : (c.unread_count || 0),
+                      };
                     }
-                  : c
-              )
+                    return c;
+                  })
+                  .sort((a, b) => new Date(b.last_message_at || b.updated_at) - new Date(a.last_message_at || a.updated_at));
+              });
+            }
+          } else if (eventType === 'UPDATE') {
+            const updatedMsg = payload.new;
+
+            // Update read_at in messages view (triggers double check for sender!)
+            setMessages((prev) =>
+              prev.map((m) => (m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m))
             );
-          } else {
-            // Message belongs to an inactive conversation (or recipient has no conversation open)
-            setConversations((prev) => {
-              const exists = prev.some((c) => c.id === incomingMsg.conversation_id);
-              if (!exists) {
-                // Fetch full conversation list if this is a newly created conversation
-                listConversations().then((list) => setConversations(list || [])).catch(() => {});
-                return prev;
-              }
-
-              const isFromOther = incomingMsg.sender_id !== user.id;
-
-              return prev
-                .map((c) => {
-                  if (c.id === incomingMsg.conversation_id) {
-                    return {
-                      ...c,
-                      last_message: incomingMsg.message || 'Photo',
-                      last_message_at: incomingMsg.created_at,
-                      unread_count: isFromOther ? (c.unread_count || 0) + 1 : (c.unread_count || 0),
-                    };
-                  }
-                  return c;
-                })
-                .sort((a, b) => new Date(b.last_message_at) - new Date(a.last_message_at));
-            });
           }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'messages',
-        },
-        (payload) => {
-          const updatedMsg = payload.new;
-
-          // Realtime update of message state (e.g. read_at timestamp updated to show double checks in sender view)
-          setMessages((prev) =>
-            prev.map((m) => (m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m))
-          );
         }
       )
       .subscribe();
 
+    // Secondary 3-second sync poller to guarantee consistency across network conditions
+    const pollInterval = setInterval(async () => {
+      try {
+        const updatedConvs = await listConversations();
+        if (updatedConvs) {
+          setConversations(updatedConvs);
+        }
+
+        // If a conversation is currently selected, fetch latest messages
+        if (selectedConvRef.current?.id) {
+          const latestMsgs = await getMessages(selectedConvRef.current.id);
+          if (latestMsgs) {
+            setMessages((prev) => {
+              const isDifferent =
+                latestMsgs.length !== prev.length ||
+                latestMsgs.some((m, idx) => m.read_at !== prev[idx]?.read_at);
+              return isDifferent ? latestMsgs : prev;
+            });
+          }
+        }
+      } catch {
+        // Poller silent catch
+      }
+    }, 3000);
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(pollInterval);
     };
   }, [isAuthenticated, user?.id]);
 
