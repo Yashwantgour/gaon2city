@@ -1,16 +1,16 @@
 # Project State: Gaon2City
 
 **Last Updated:** 2026-08-14  
-**Current Status:** Phase 6 (Direct Messaging & Realtime Chat) planned and ready for execution.
+**Current Status:** Phase 6 (Direct Messaging & Realtime Chat) executed and verified.
 
 ---
 
 ## 📊 Milestone Progress
 
-- **Milestone 1 (Core Hyperlocal Marketplace):** Complete (Phases 0–5 implemented and functional in code).
-- **Milestone 2 (Realtime & External Services):** In Progress
-  - Phase 6: Direct Messaging & Realtime Chat — **Planned (PLAN.md ready)**
-  - Phase 7: Mapbox Directions & Navigation — Queued
+- **Milestone 1 (Core Hyperlocal Marketplace):** Complete (Phases 0–5 complete).
+- **Milestone 2 (Realtime & External Services):** In Progress (8 / 11 total phases complete — 72%)
+  - Phase 6: Direct Messaging & Realtime Chat — ✅ **Completed**
+  - Phase 7: Mapbox Directions & Navigation — ⏳ **Next to Plan**
   - Phase 8: Payment Gateway (Razorpay) — Queued
 - **Milestone 3 (Trust, Quality & Hardening):** Phase 9 complete; Phase 10 (Testing & CI/CD) queued.
 
@@ -18,11 +18,8 @@
 
 ## 🎯 Active Focus
 
-- **Active Plan:** [.planning/phases/06-direct-messaging-realtime-chat/PLAN.md](file:///c:/Users/HP/OneDrive/Desktop/gaon2city/.planning/phases/06-direct-messaging-realtime-chat/PLAN.md)
-- **Execution Waves:**
-  - Wave 1: Contextual Navigation & Initiation (ProductDetails -> Chat route state)
-  - Wave 2: Realtime Subscriptions & Unread Badges
-  - Wave 3: Image Attachments & UX Polish
+- **Completed:** Phase 6 ([.planning/phases/06-direct-messaging-realtime-chat/SUMMARY.md](file:///c:/Users/HP/OneDrive/Desktop/gaon2city/.planning/phases/06-direct-messaging-realtime-chat/SUMMARY.md))
+- **Next Phase:** Phase 7 (Mapbox Directions & "Go to Seller" Navigation)
 
 ---
 
@@ -37,4 +34,4 @@
 
 ## ⚠️ Next Action
 
-Run `/gsd-execute-phase 6` to execute the planned tasks.
+Run `/gsd-plan-phase 7` to plan Mapbox navigation and directions routing.

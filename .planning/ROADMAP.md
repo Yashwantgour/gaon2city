@@ -41,7 +41,7 @@
 
 ## Milestone 2: Interactive Realtime & External Services
 
-- [ ] **Phase 6 — Direct Messaging & Realtime Chat**
+- [x] **Phase 6 — Direct Messaging & Realtime Chat**
   - Buyer-seller direct chat linked to specific products/orders.
   - Supabase Realtime channel subscriptions for instant message delivery and unread indicators.
   - Media/image attachments in chat threads.

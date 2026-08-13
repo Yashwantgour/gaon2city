@@ -10,6 +10,7 @@ import {
   HiOutlineXMark,
   HiOutlineMapPin,
   HiOutlinePlus,
+  HiOutlineChatBubbleLeftRight,
 } from 'react-icons/hi2';
 import { selectCartCount } from '../../features/cart/cartSlice';
 import Button from '../common/Button';
@@ -74,6 +75,16 @@ export default function Navbar() {
               >
                 Sell
               </Button>
+            )}
+
+            {isAuthenticated && (
+              <button
+                onClick={() => navigate('/chat')}
+                className="relative p-2.5 rounded-xl text-neutral-600 hover:bg-neutral-100 transition-colors"
+                aria-label="Messages"
+              >
+                <HiOutlineChatBubbleLeftRight className="w-5 h-5" />
+              </button>
             )}
 
             <button
