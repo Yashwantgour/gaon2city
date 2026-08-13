@@ -174,6 +174,7 @@ export async function sendMessage(conversationId, senderId, { message, image_pat
       sender_id: senderId,
       message,
       image_path: image_path || null,
+      read_at: null,
     })
     .select()
     .single();
