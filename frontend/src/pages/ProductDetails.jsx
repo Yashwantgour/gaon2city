@@ -12,7 +12,6 @@ import {
   HiOutlineArrowLeft,
   HiOutlineChevronLeft,
   HiOutlineChevronRight,
-  HiOutlineCheck,
   HiOutlineFlag,
   HiStar,
 } from 'react-icons/hi2';
@@ -21,7 +20,13 @@ import ReviewList from '../components/product/ReviewList';
 import ReviewFormModal from '../components/product/ReviewFormModal';
 import ReportModal from '../components/common/ReportModal';
 import { addToCart } from '../features/cart/cartSlice';
-import { formatPrice, formatDistance, getConditionLabel, getSellerTypeLabel } from '../utils/helpers';
+import {
+  formatPrice,
+  formatDistance,
+  getConditionLabel,
+  getSellerTypeLabel,
+  isProductOutOfStock,
+} from '../utils/helpers';
 import { getProductById } from '../services/productsApi';
 import { getSellerReviews } from '../services/reviewsApi';
 
@@ -62,6 +67,7 @@ export default function ProductDetails() {
   const reduxProduct = storeItems.find((p) => String(p.id) === String(id));
   const activeProduct = product || reduxProduct;
 
+  const isOutOfStock = isProductOutOfStock(activeProduct);
   const sellerId = activeProduct?.seller_id || activeProduct?.seller?.id;
 
   const loadReviews = useCallback(async () => {
@@ -112,10 +118,12 @@ export default function ProductDetails() {
   const displayImages = images.length > 0 ? images : [''];
 
   const handleAddToCart = () => {
+    if (isOutOfStock) return;
     dispatch(addToCart(activeProduct));
   };
 
   const handleBuyNow = () => {
+    if (isOutOfStock) return;
     handleAddToCart();
     navigate('/checkout');
   };
@@ -199,30 +207,42 @@ export default function ProductDetails() {
 
       {/* Main Product Details Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
-        {/* Left: Product Images */}
+        {/* Left: Product Images & Out of Stock Overlay */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           className="space-y-4"
         >
-          <div className="relative aspect-4/3 rounded-3xl overflow-hidden bg-neutral-100 border border-neutral-100 shadow-xs">
+          <div className="relative aspect-4/3 rounded-3xl overflow-hidden bg-neutral-100 border border-neutral-100 shadow-xs select-none">
             {displayImages[currentImage] && !imgError ? (
               <img
                 src={displayImages[currentImage]}
                 alt={activeProduct.title}
                 onError={() => setImgError(true)}
-                className="w-full h-full object-cover"
+                className={`w-full h-full object-cover transition-transform duration-500 ${
+                  isOutOfStock ? 'opacity-90 grayscale-15' : ''
+                }`}
               />
             ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center text-neutral-300">
-                <span className="text-6xl mb-2">🌾</span>
-                <span className="text-sm font-medium">Local Produce</span>
+              <div className="w-full h-full flex flex-col items-center justify-center bg-neutral-50 text-neutral-400 p-6 text-center">
+                <span className="text-5xl mb-2 opacity-60">🖼️</span>
+                <span className="text-xs font-semibold text-neutral-500">Image unavailable</span>
+              </div>
+            )}
+
+            {/* Out of Stock Translucent Badge Overlay on Image */}
+            {isOutOfStock && (
+              <div className="absolute inset-0 bg-neutral-950/45 backdrop-blur-2xs flex items-center justify-center p-4 pointer-events-none">
+                <div className="px-4 py-2 rounded-full bg-neutral-900/90 text-white text-xs sm:text-sm font-extrabold uppercase tracking-wider shadow-xl border border-white/20 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                  <span>Out of Stock</span>
+                </div>
               </div>
             )}
 
             <button
               onClick={() => setIsFavorite(!isFavorite)}
-              className="absolute top-4 right-4 p-3 rounded-full bg-white/90 backdrop-blur-xs text-neutral-700 hover:text-red-500 transition-colors shadow-sm"
+              className="absolute top-4 right-4 p-3 rounded-full bg-white/90 backdrop-blur-xs text-neutral-700 hover:text-red-500 transition-colors shadow-sm z-10"
             >
               {isFavorite ? <HiHeart className="w-5 h-5 text-red-500" /> : <HiOutlineHeart className="w-5 h-5" />}
             </button>
@@ -231,13 +251,13 @@ export default function ProductDetails() {
               <>
                 <button
                   onClick={prevImage}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90 backdrop-blur-xs text-neutral-700 hover:bg-white shadow-sm"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90 backdrop-blur-xs text-neutral-700 hover:bg-white shadow-sm z-10"
                 >
                   <HiOutlineChevronLeft className="w-5 h-5" />
                 </button>
                 <button
                   onClick={nextImage}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90 backdrop-blur-xs text-neutral-700 hover:bg-white shadow-sm"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90 backdrop-blur-xs text-neutral-700 hover:bg-white shadow-sm z-10"
                 >
                   <HiOutlineChevronRight className="w-5 h-5" />
                 </button>
@@ -245,7 +265,7 @@ export default function ProductDetails() {
             )}
 
             {activeProduct.condition && (
-              <span className="absolute bottom-4 left-4 px-3 py-1 rounded-full text-xs font-semibold bg-white/90 backdrop-blur-xs text-neutral-800 shadow-xs">
+              <span className="absolute bottom-4 left-4 px-3 py-1 rounded-full text-xs font-semibold bg-white/90 backdrop-blur-xs text-neutral-800 shadow-xs z-10">
                 {getConditionLabel(activeProduct.condition)}
               </span>
             )}
@@ -268,7 +288,7 @@ export default function ProductDetails() {
           )}
         </motion.div>
 
-        {/* Right: Product Info & Actions */}
+        {/* Right: Product Info & Purchase Controls */}
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -293,26 +313,41 @@ export default function ProductDetails() {
               {activeProduct.title}
             </h1>
 
-            {/* Quick Star Rating Score */}
-            <div className="flex items-center gap-2">
-              <div className="flex text-amber-400">
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <HiStar
-                    key={s}
-                    className={`w-4 h-4 ${
-                      s <= Math.round(reviewsData.summary.averageRating || 5)
-                        ? 'text-amber-400 fill-amber-400'
-                        : 'text-neutral-200'
-                    }`}
-                  />
-                ))}
+            {/* Rating Score & Stock Status Pill */}
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex text-amber-400">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <HiStar
+                      key={s}
+                      className={`w-4 h-4 ${
+                        s <= Math.round(reviewsData.summary.averageRating || 5)
+                          ? 'text-amber-400 fill-amber-400'
+                          : 'text-neutral-200'
+                      }`}
+                    />
+                  ))}
+                </div>
+                <span className="text-xs font-bold text-neutral-800">
+                  {reviewsData.summary.averageRating > 0 ? reviewsData.summary.averageRating.toFixed(1) : '5.0'}
+                </span>
+                <span className="text-xs text-neutral-400">
+                  ({reviewsData.summary.totalReviews} reviews)
+                </span>
               </div>
-              <span className="text-xs font-bold text-neutral-800">
-                {reviewsData.summary.averageRating > 0 ? reviewsData.summary.averageRating.toFixed(1) : '5.0'}
-              </span>
-              <span className="text-xs text-neutral-400">
-                ({reviewsData.summary.totalReviews} reviews)
-              </span>
+
+              {/* Stock Status Badge */}
+              {isOutOfStock ? (
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-red-500" />
+                  <span>Out of Stock</span>
+                </span>
+              ) : (
+                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span>In Stock ({activeProduct.quantity} available)</span>
+                </span>
+              )}
             </div>
 
             <div className="flex items-baseline gap-2 mt-4">
@@ -345,22 +380,26 @@ export default function ProductDetails() {
             </div>
           </div>
 
-          {/* Quantity and Cart Buttons */}
+          {/* Quantity Selector & Purchase Buttons */}
           <div className="space-y-3">
             <div className="flex items-center gap-4">
               <span className="text-sm font-medium text-neutral-700">Quantity:</span>
-              <div className="flex items-center border border-neutral-200 rounded-xl overflow-hidden bg-white">
+              <div className={`flex items-center border border-neutral-200 rounded-xl overflow-hidden bg-white ${
+                isOutOfStock ? 'opacity-50 pointer-events-none' : ''
+              }`}>
                 <button
                   onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  disabled={isOutOfStock}
                   className="px-3.5 py-1.5 hover:bg-neutral-50 text-neutral-600 font-semibold"
                 >
                   -
                 </button>
                 <span className="px-4 py-1.5 text-sm font-semibold text-neutral-800 min-w-[40px] text-center">
-                  {quantity}
+                  {isOutOfStock ? 0 : quantity}
                 </span>
                 <button
-                  onClick={() => setQuantity((q) => q + 1)}
+                  onClick={() => setQuantity((q) => Math.min(activeProduct.quantity || 99, q + 1))}
+                  disabled={isOutOfStock}
                   className="px-3.5 py-1.5 hover:bg-neutral-50 text-neutral-600 font-semibold"
                 >
                   +
@@ -370,25 +409,27 @@ export default function ProductDetails() {
 
             <div className="flex gap-3 pt-2">
               <Button
-                variant="outline"
+                variant={isOutOfStock ? 'secondary' : 'outline'}
                 size="lg"
                 className="flex-1"
+                disabled={isOutOfStock}
                 onClick={handleAddToCart}
               >
-                Add to Cart
+                {isOutOfStock ? 'Out of Stock' : 'Add to Cart'}
               </Button>
               <Button
                 variant="primary"
                 size="lg"
                 className="flex-1"
+                disabled={isOutOfStock}
                 onClick={handleBuyNow}
               >
-                Buy Now
+                {isOutOfStock ? 'Currently Unavailable' : 'Buy Now'}
               </Button>
             </div>
           </div>
 
-          {/* Chat and Go to Seller Actions */}
+          {/* Chat & Navigation Actions (Always Active) */}
           <div className="flex gap-3 pt-2">
             <Button
               variant="outline"
@@ -412,7 +453,7 @@ export default function ProductDetails() {
             </Button>
           </div>
 
-          {/* Seller Trust Card with Badges */}
+          {/* Seller Trust Card */}
           {activeProduct.seller && (
             <div className="bg-neutral-50 rounded-2xl p-4 border border-neutral-100 space-y-3">
               <div className="flex items-center gap-3">

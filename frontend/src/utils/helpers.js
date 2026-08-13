@@ -89,6 +89,16 @@ export const getOrderStatusLabel = (status) => {
   return labels[status] || status;
 };
 
+export const isProductAvailable = (product) => {
+  if (!product) return false;
+  if (product.status && product.status !== 'active') return false;
+  return Number(product.quantity ?? 1) > 0;
+};
+
+export const isProductOutOfStock = (product) => {
+  return !isProductAvailable(product);
+};
+
 export const getStatusColor = (status) => {
   const colors = {
     pending: 'bg-yellow-100 text-yellow-800',

@@ -25,6 +25,8 @@ function SellerProductRow({ product, index, navigate, handleDeleteProduct }) {
     ? product.images[0]
     : product.images?.[0]?.storage_path;
 
+  const isOutOfStock = (Number(product.quantity) || 0) <= 0 || product.status === 'out_of_stock';
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 5 }}
@@ -36,20 +38,32 @@ function SellerProductRow({ product, index, navigate, handleDeleteProduct }) {
         <img
           src={imageSource}
           alt={product.title}
-          className="w-14 h-14 rounded-xl object-cover bg-neutral-100 shrink-0"
+          className={`w-14 h-14 rounded-xl object-cover bg-neutral-100 shrink-0 ${
+            isOutOfStock ? 'opacity-80 grayscale-20' : ''
+          }`}
           onError={() => setImgError(true)}
         />
       ) : (
-        <div className="w-14 h-14 rounded-xl bg-neutral-100 flex items-center justify-center text-xl shrink-0 border border-neutral-100">
-          📦
+        <div className="w-14 h-14 rounded-xl bg-neutral-50 flex items-center justify-center text-lg shrink-0 border border-neutral-100 text-neutral-400">
+          🖼️
         </div>
       )}
       <div className="flex-1 min-w-0">
-        <h3 className="font-medium text-neutral-800 text-sm line-clamp-1">{product.title}</h3>
-        <p className="text-sm font-semibold text-primary-600">{formatPrice(product.price)}</p>
-        <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(product.status)}`}>
-          {product.status}
-        </span>
+        <div className="flex items-center gap-2">
+          <h3 className="font-medium text-neutral-800 text-sm line-clamp-1">{product.title}</h3>
+          {isOutOfStock && (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">
+              Out of Stock
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3 mt-0.5 text-xs text-neutral-500">
+          <span className="font-bold text-primary-600">{formatPrice(product.price)}</span>
+          <span>•</span>
+          <span className={isOutOfStock ? 'text-red-600 font-medium' : 'text-neutral-600'}>
+            Stock: <strong>{product.quantity ?? 0}</strong> {product.unit || 'units'}
+          </span>
+        </div>
       </div>
       <div className="flex items-center gap-1 shrink-0">
         <button
