@@ -18,6 +18,7 @@ const sizes = {
 
 export default function Button({
   children,
+  type = 'button',
   variant = 'primary',
   size = 'md',
   className = '',
@@ -30,6 +31,7 @@ export default function Button({
 }) {
   return (
     <motion.button
+      type={type}
       whileHover={{ scale: disabled || isLoading ? 1 : 1.02 }}
       whileTap={{ scale: disabled || isLoading ? 1 : 0.98 }}
       className={`

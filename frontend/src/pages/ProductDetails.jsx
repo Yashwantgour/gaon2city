@@ -87,6 +87,28 @@ export default function ProductDetails() {
     dispatch(showToast({ type: 'success', message: `${activeProduct.title} added to cart` }));
   };
 
+  const handleChatSeller = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    const sellerId =
+      activeProduct?.seller_id ||
+      activeProduct?.seller?.id ||
+      (typeof activeProduct?.seller === 'string' ? activeProduct.seller : null);
+
+    const targetUrl = sellerId
+      ? `/chat?seller=${sellerId}&product=${activeProduct?.id || id}`
+      : '/chat';
+
+    navigate(targetUrl, {
+      state: {
+        seller: activeProduct?.seller || null,
+        product: activeProduct || null,
+      },
+    });
+  };
+
   const nextImage = () => setCurrentImage((prev) => (prev + 1) % displayImages.length);
   const prevImage = () => setCurrentImage((prev) => (prev - 1 + displayImages.length) % displayImages.length);
 
@@ -281,26 +303,17 @@ export default function ProductDetails() {
             <Button
               variant="outline"
               size="md"
+              type="button"
               icon={<HiOutlineChatBubbleLeftRight />}
               className="flex-1"
-              onClick={() => {
-                const sellerId = activeProduct.seller_id || activeProduct.seller?.id;
-                navigate(
-                  sellerId ? `/chat?seller=${sellerId}&product=${activeProduct.id}` : '/chat',
-                  {
-                    state: {
-                      seller: activeProduct.seller,
-                      product: activeProduct,
-                    },
-                  }
-                );
-              }}
+              onClick={handleChatSeller}
             >
               Chat Seller
             </Button>
             <Button
               variant="secondary"
               size="md"
+              type="button"
               icon={<HiOutlineMapPin />}
               className="flex-1"
             >
