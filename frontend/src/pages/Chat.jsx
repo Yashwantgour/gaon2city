@@ -39,16 +39,25 @@ export default function Chat() {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [selectedImagePreview, setSelectedImagePreview] = useState(null);
 
-  const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // Auto-scroll to bottom of messages container
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // Auto-scroll ONLY the chat messages container to the bottom (never scrolls the main window)
+  const scrollToBottom = (smooth = true) => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto',
+      });
+    }
   };
 
   useEffect(() => {
-    scrollToBottom();
+    // Short timeout to allow new DOM elements to be laid out
+    const timeoutId = setTimeout(() => {
+      scrollToBottom(true);
+    }, 50);
+    return () => clearTimeout(timeoutId);
   }, [messages]);
 
   // Load conversation list and handle deep linking from query params (?seller=...&product=...)
@@ -413,7 +422,10 @@ export default function Chat() {
                 </div>
 
                 {/* Messages List */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-neutral-50/20">
+                <div
+                  ref={messagesContainerRef}
+                  className="flex-1 overflow-y-auto p-4 space-y-3 bg-neutral-50/20"
+                >
                   {messages.length === 0 ? (
                     <div className="h-full flex items-center justify-center text-center text-xs text-neutral-400">
                       Send a message to begin the conversation
@@ -468,7 +480,6 @@ export default function Chat() {
                       );
                     })
                   )}
-                  <div ref={messagesEndRef} />
                 </div>
 
                 {/* Selected Image Thumbnail Preview before sending */}
