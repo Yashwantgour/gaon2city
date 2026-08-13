@@ -59,7 +59,12 @@ export async function createConversation(buyerId, { seller_id, product_id, order
   // Check if conversation already exists
   let query = supabaseAdmin
     .from('conversations')
-    .select('*')
+    .select(`
+      *,
+      buyer:profiles!buyer_id(id, name, avatar_url),
+      seller:profiles!seller_id(id, name, avatar_url),
+      product:products(id, title, slug, images:product_images(storage_path))
+    `)
     .eq('buyer_id', buyerId)
     .eq('seller_id', seller_id);
 
@@ -70,10 +75,10 @@ export async function createConversation(buyerId, { seller_id, product_id, order
   const { data: existing } = await query.limit(1).single();
 
   if (existing) {
-    return existing; // Return existing conversation
+    return existing; // Return existing conversation with enriched relations
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data: newRow, error } = await supabaseAdmin
     .from('conversations')
     .insert({
       buyer_id: buyerId,
@@ -81,14 +86,34 @@ export async function createConversation(buyerId, { seller_id, product_id, order
       product_id: product_id || null,
       order_id: order_id || null,
     })
-    .select()
+    .select(`
+      *,
+      buyer:profiles!buyer_id(id, name, avatar_url),
+      seller:profiles!seller_id(id, name, avatar_url),
+      product:products(id, title, slug, images:product_images(storage_path))
+    `)
     .single();
 
   if (error) {
-    throw ApiError.internal('Failed to create conversation');
+    // If foreign key relation join fails on insert, fallback to bare insert and manual fetch
+    const { data: bareRow, error: bareError } = await supabaseAdmin
+      .from('conversations')
+      .insert({
+        buyer_id: buyerId,
+        seller_id,
+        product_id: product_id || null,
+        order_id: order_id || null,
+      })
+      .select()
+      .single();
+
+    if (bareError) {
+      throw ApiError.internal('Failed to create conversation');
+    }
+    return bareRow;
   }
 
-  return data;
+  return newRow;
 }
 
 /**

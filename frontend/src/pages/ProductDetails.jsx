@@ -285,7 +285,15 @@ export default function ProductDetails() {
               className="flex-1"
               onClick={() => {
                 const sellerId = activeProduct.seller_id || activeProduct.seller?.id;
-                navigate(sellerId ? `/chat?seller=${sellerId}&product=${activeProduct.id}` : '/chat');
+                navigate(
+                  sellerId ? `/chat?seller=${sellerId}&product=${activeProduct.id}` : '/chat',
+                  {
+                    state: {
+                      seller: activeProduct.seller,
+                      product: activeProduct,
+                    },
+                  }
+                );
               }}
             >
               Chat Seller

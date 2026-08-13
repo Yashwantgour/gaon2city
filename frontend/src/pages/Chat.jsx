@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { useState, useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import {
   HiOutlinePaperAirplane,
   HiOutlinePhoto,
@@ -18,16 +18,20 @@ import {
   sendMessage,
   markMessageRead,
 } from '../services/conversationsApi';
+import { getProductById } from '../services/productsApi';
 import { uploadFile } from '../services/storageService';
 import { supabase } from '../services/supabase';
 
 export default function Chat() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const { isAuthenticated, user } = useSelector((state) => state.auth);
 
+  const routeState = location.state || {};
   const [conversations, setConversations] = useState([]);
   const [selectedConv, setSelectedConv] = useState(null);
+  const [activeProduct, setActiveProduct] = useState(routeState.product || null);
   const [messageInput, setMessageInput] = useState('');
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -56,6 +60,13 @@ export default function Chat() {
       const sellerParam = searchParams.get('seller');
       const productParam = searchParams.get('product');
 
+      // If productParam exists but no activeProduct state, fetch product info
+      if (productParam && !activeProduct) {
+        getProductById(productParam)
+          .then((prod) => setActiveProduct(prod))
+          .catch(() => {});
+      }
+
       try {
         let convList = await listConversations();
         convList = convList || [];
@@ -65,27 +76,47 @@ export default function Chat() {
           // Check if conversation already exists
           const existing = convList.find(
             (c) =>
-              (c.seller_id === sellerParam || c.seller?.id === sellerParam || c.buyer_id === sellerParam || c.buyer?.id === sellerParam) &&
-              (!productParam || c.product_id === productParam)
+              (c.seller_id === sellerParam ||
+                c.seller?.id === sellerParam ||
+                c.buyer_id === sellerParam ||
+                c.buyer?.id === sellerParam) &&
+              (!productParam || String(c.product_id) === String(productParam))
           );
 
           if (existing) {
             setSelectedConv(existing);
+            if (existing.product) {
+              setActiveProduct(existing.product);
+            }
           } else {
-            // Create a new conversation thread
+            // Create a new conversation thread with seller and product context
             try {
               const newConv = await createConversation({
                 seller_id: sellerParam,
                 product_id: productParam || null,
               });
-              setConversations((prev) => [newConv, ...prev.filter((c) => c.id !== newConv.id)]);
-              setSelectedConv(newConv);
+
+              // Merge route state seller/product info if backend did not join them
+              const enrichedConv = {
+                ...newConv,
+                seller: newConv.seller || routeState.seller || (activeProduct ? activeProduct.seller : null),
+                product: newConv.product || routeState.product || activeProduct,
+              };
+
+              setConversations((prev) => [
+                enrichedConv,
+                ...prev.filter((c) => c.id !== enrichedConv.id),
+              ]);
+              setSelectedConv(enrichedConv);
             } catch (err) {
               console.error('Failed to auto-create conversation:', err);
             }
           }
         } else if (convList.length > 0 && !selectedConv && window.innerWidth >= 640) {
           setSelectedConv(convList[0]);
+          if (convList[0].product) {
+            setActiveProduct(convList[0].product);
+          }
         }
       } catch (err) {
         console.error('Error loading conversations:', err);
@@ -101,6 +132,15 @@ export default function Chat() {
   // Fetch messages for selected conversation
   useEffect(() => {
     if (!selectedConv?.id) return;
+
+    // Update active product if available in selected conversation
+    if (selectedConv.product) {
+      setActiveProduct(selectedConv.product);
+    } else if (selectedConv.product_id && !activeProduct) {
+      getProductById(selectedConv.product_id)
+        .then((prod) => setActiveProduct(prod))
+        .catch(() => {});
+    }
 
     async function fetchMsgs() {
       try {
@@ -178,6 +218,20 @@ export default function Chat() {
       </div>
     );
   }
+
+  // Resolve other participant info robustly
+  const getOtherParticipant = (conv) => {
+    if (!conv) return null;
+    const isBuyer = conv.buyer_id === user?.id || conv.buyer?.id === user?.id;
+    if (isBuyer) {
+      return conv.seller || routeState.seller || (activeProduct?.seller ? activeProduct.seller : null);
+    }
+    return conv.buyer || routeState.buyer || null;
+  };
+
+  const currentOther = getOtherParticipant(selectedConv);
+  const currentOtherName = currentOther?.name || (selectedConv?.seller?.name || selectedConv?.buyer?.name) || 'Seller';
+  const currentProduct = selectedConv?.product || activeProduct || routeState.product;
 
   const handleSend = async () => {
     if ((!messageInput.trim() && !selectedImagePreview) || !selectedConv || isSending) return;
@@ -266,13 +320,17 @@ export default function Chat() {
                 <div className="p-8 text-center text-sm text-neutral-400">No conversations yet</div>
               ) : (
                 conversations.map((conv) => {
-                  const other = conv.buyer?.id === user?.id ? conv.seller : conv.buyer;
+                  const other = getOtherParticipant(conv);
+                  const otherName = other?.name || (conv.seller?.name || conv.buyer?.name) || 'User';
                   const isSelected = selectedConv?.id === conv.id;
 
                   return (
                     <button
                       key={conv.id}
-                      onClick={() => setSelectedConv(conv)}
+                      onClick={() => {
+                        setSelectedConv(conv);
+                        if (conv.product) setActiveProduct(conv.product);
+                      }}
                       className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-neutral-50 transition-colors text-left ${
                         isSelected ? 'bg-primary-50/60 border-r-2 border-primary-500' : ''
                       }`}
@@ -281,18 +339,18 @@ export default function Chat() {
                         {other?.avatar_url ? (
                           <img
                             src={other.avatar_url}
-                            alt={other.name}
+                            alt={otherName}
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          other?.name?.charAt(0) || 'U'
+                          otherName.charAt(0).toUpperCase()
                         )}
                       </div>
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
                           <h4 className="text-sm font-semibold text-neutral-800 truncate">
-                            {other?.name || 'User'}
+                            {otherName}
                           </h4>
                           <span className="text-[10px] text-neutral-400 shrink-0">
                             {formatRelativeTime(conv.last_message_at)}
@@ -330,38 +388,24 @@ export default function Chat() {
                     </button>
 
                     <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center font-bold text-primary-600 overflow-hidden">
-                      {(selectedConv.buyer?.id === user?.id
-                        ? selectedConv.seller
-                        : selectedConv.buyer
-                      )?.avatar_url ? (
+                      {currentOther?.avatar_url ? (
                         <img
-                          src={
-                            (selectedConv.buyer?.id === user?.id
-                              ? selectedConv.seller
-                              : selectedConv.buyer
-                            )?.avatar_url
-                          }
-                          alt="Avatar"
+                          src={currentOther.avatar_url}
+                          alt={currentOtherName}
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        (selectedConv.buyer?.id === user?.id
-                          ? selectedConv.seller
-                          : selectedConv.buyer
-                        )?.name?.charAt(0) || 'U'
+                        currentOtherName.charAt(0).toUpperCase()
                       )}
                     </div>
 
                     <div>
                       <h4 className="text-sm font-semibold text-neutral-800">
-                        {(selectedConv.buyer?.id === user?.id
-                          ? selectedConv.seller
-                          : selectedConv.buyer
-                        )?.name || 'User'}
+                        {currentOtherName}
                       </h4>
-                      {selectedConv.product && (
-                        <p className="text-xs text-primary-600 font-medium truncate max-w-xs">
-                          Regarding: {selectedConv.product.title}
+                      {currentProduct && (
+                        <p className="text-xs text-primary-600 font-medium truncate max-w-xs sm:max-w-md">
+                          Regarding: {currentProduct.title}
                         </p>
                       )}
                     </div>
