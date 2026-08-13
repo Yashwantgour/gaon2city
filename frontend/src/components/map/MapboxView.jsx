@@ -1,7 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
-import { getMapConfig } from '../../services/mapApi';
+import { motion } from 'framer-motion';
+import { useState, useMemo } from 'react';
+import {
+  HiOutlinePlus,
+  HiOutlineMinus,
+  HiOutlineMapPin,
+  HiOutlineBuildingStorefront,
+  HiOutlineArrowPath,
+} from 'react-icons/hi2';
 
 export default function MapboxView({
   origin = { lat: 28.6139, lng: 77.2090, label: 'Your Location' },
@@ -9,260 +14,243 @@ export default function MapboxView({
   routeGeometry,
   className = '',
 }) {
-  const mapContainerRef = useRef(null);
-  const mapRef = useRef(null);
-  const originMarkerRef = useRef(null);
-  const destMarkerRef = useRef(null);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
 
-  const [mapLoaded, setMapLoaded] = useState(false);
-  const [mapError, setMapError] = useState(null);
-
-  // Initialize Mapbox GL Map
-  useEffect(() => {
-    let isMounted = true;
-
-    async function initMap() {
-      try {
-        let token = import.meta.env.VITE_MAPBOX_TOKEN;
-        if (!token || !token.startsWith('pk.')) {
-          const config = await getMapConfig();
-          if (config?.mapbox_token) {
-            token = config.mapbox_token;
-          }
-        }
-
-        // Determine map style: Mapbox streets if token is present, otherwise CartoDB / OSM real streets style
-        let mapStyle;
-        if (token && token.startsWith('pk.')) {
-          mapboxgl.accessToken = token;
-          mapStyle = 'mapbox://styles/mapbox/streets-v12';
-        } else {
-          // Standard client-safe real road geographic tile style
-          mapboxgl.accessToken = 'pk.eyJ1IjoicGxhY2Vob2xkZXIiLCJhIjoiY2xwbGFjZWhvbGRlciJ9.placeholder';
-          mapStyle = {
-            version: 8,
-            sources: {
-              'osm-tiles': {
-                type: 'raster',
-                tiles: [
-                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                ],
-                tileSize: 256,
-                attribution: '© OpenStreetMap contributors',
-              },
-            },
-            layers: [
-              {
-                id: 'osm-tiles-layer',
-                type: 'raster',
-                source: 'osm-tiles',
-                minzoom: 0,
-                maxzoom: 19,
-              },
-            ],
-          };
-        }
-
-        if (!mapContainerRef.current) return;
-
-        // Clean up previous map if exists
-        if (mapRef.current) {
-          mapRef.current.remove();
-          mapRef.current = null;
-        }
-
-        const map = new mapboxgl.Map({
-          container: mapContainerRef.current,
-          style: mapStyle,
-          center: [origin.lng, origin.lat],
-          zoom: 12,
-          attributionControl: true,
-        });
-
-        // Add native Mapbox navigation controls (zoom in, zoom out, compass/bearing)
-        map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'top-right');
-
-        map.on('load', () => {
-          if (!isMounted) return;
-          mapRef.current = map;
-          setMapLoaded(true);
-        });
-
-        map.on('error', (e) => {
-          // Ignore non-fatal tile errors
-          if (e?.error?.status !== 401 && e?.error?.status !== 403) {
-            console.warn('Mapbox non-fatal event:', e);
-          }
-        });
-      } catch (err) {
-        console.error('Failed to initialize Mapbox:', err);
-        if (isMounted) setMapError('Unable to initialize map view.');
-      }
-    }
-
-    initMap();
-
-    return () => {
-      isMounted = false;
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-    };
-  }, []);
-
-  // Update Markers and Route Layer whenever origin, destination, or routeGeometry changes
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapLoaded) return;
-
-    // 1. Create or Update Origin Marker (Buyer)
-    if (!originMarkerRef.current) {
-      const el = document.createElement('div');
-      el.className = 'custom-buyer-marker flex flex-col items-center cursor-pointer';
-      el.innerHTML = `
-        <div class="relative flex items-center justify-center">
-          <div class="w-8 h-8 rounded-full bg-sky-400/30 animate-ping absolute"></div>
-          <div class="w-5 h-5 rounded-full bg-sky-600 border-2 border-white shadow-md flex items-center justify-center">
-            <div class="w-1.5 h-1.5 rounded-full bg-white"></div>
-          </div>
-        </div>
-        <div class="px-2 py-0.5 mt-1 bg-slate-900 text-sky-400 text-[10px] font-bold rounded-md shadow-md border border-sky-400/40 whitespace-nowrap">
-          You
-        </div>
-      `;
-      originMarkerRef.current = new mapboxgl.Marker({ element: el })
-        .setLngLat([origin.lng, origin.lat])
-        .addTo(map);
-    } else {
-      originMarkerRef.current.setLngLat([origin.lng, origin.lat]);
-    }
-
-    // 2. Create or Update Destination Marker (Seller)
-    if (!destMarkerRef.current) {
-      const el = document.createElement('div');
-      el.className = 'custom-seller-marker flex flex-col items-center cursor-pointer';
-      el.innerHTML = `
-        <div class="relative flex items-center justify-center">
-          <div class="w-9 h-9 rounded-full bg-emerald-400/30 animate-pulse absolute"></div>
-          <div class="w-6 h-6 rounded-full bg-emerald-600 border-2 border-white shadow-md flex items-center justify-center text-white text-[10px] font-bold">
-            🏪
-          </div>
-        </div>
-        <div class="px-2.5 py-0.5 mt-1 bg-slate-900 text-emerald-400 text-[10px] font-bold rounded-md shadow-md border border-emerald-400/40 whitespace-nowrap">
-          Seller
-        </div>
-      `;
-      destMarkerRef.current = new mapboxgl.Marker({ element: el })
-        .setLngLat([destination.lng, destination.lat])
-        .addTo(map);
-    } else {
-      destMarkerRef.current.setLngLat([destination.lng, destination.lat]);
-    }
-
-    // 3. Render Real Road-Following Route Polyline
-    const coordinates = routeGeometry?.coordinates?.length
+  // Calculate bounding box and SVG projection
+  const { pathData, originPoint, destPoint, viewBox, centerPoint } = useMemo(() => {
+    const rawCoords = routeGeometry?.coordinates?.length
       ? routeGeometry.coordinates
       : [
           [origin.lng, origin.lat],
           [destination.lng, destination.lat],
         ];
 
-    const geojsonData = {
-      type: 'Feature',
-      properties: {},
-      geometry: {
-        type: 'LineString',
-        coordinates,
-      },
+    let minLng = Infinity;
+    let maxLng = -Infinity;
+    let minLat = Infinity;
+    let maxLat = -Infinity;
+
+    rawCoords.forEach(([lng, lat]) => {
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+    });
+
+    // Add 25% padding so markers don't clip
+    const lngSpan = Math.max(0.01, maxLng - minLng);
+    const latSpan = Math.max(0.01, maxLat - minLat);
+    const paddingLng = lngSpan * 0.35;
+    const paddingLat = latSpan * 0.35;
+
+    const bounds = {
+      minLng: minLng - paddingLng,
+      maxLng: maxLng + paddingLng,
+      minLat: minLat - paddingLat,
+      maxLat: maxLat + paddingLat,
     };
 
-    if (map.getSource('route')) {
-      map.getSource('route').setData(geojsonData);
-    } else {
-      map.addSource('route', {
-        type: 'geojson',
-        data: geojsonData,
-      });
+    const width = 800;
+    const height = 500;
 
-      // Outer casing for road contrast
-      map.addLayer({
-        id: 'route-casing',
-        type: 'line',
-        source: 'route',
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round',
-        },
-        paint: {
-          'line-color': '#ffffff',
-          'line-width': 8,
-          'line-opacity': 0.9,
-        },
-      });
+    const project = (lng, lat) => {
+      const x = ((lng - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * width;
+      // Invert Y because SVG coordinates have y=0 at top
+      const y = height - ((lat - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * height;
+      return { x, y };
+    };
 
-      // Navigation blue route line
-      map.addLayer({
-        id: 'route-line',
-        type: 'line',
-        source: 'route',
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round',
-        },
-        paint: {
-          'line-color': '#2563eb',
-          'line-width': 5,
-        },
-      });
-    }
+    const projectedPoints = rawCoords.map(([lng, lat]) => project(lng, lat));
 
-    // 4. Auto-fit Map to Complete Route Bounds
-    if (coordinates.length > 0) {
-      const bounds = new mapboxgl.LngLatBounds();
-      coordinates.forEach(([lng, lat]) => bounds.extend([lng, lat]));
-      bounds.extend([origin.lng, origin.lat]);
-      bounds.extend([destination.lng, destination.lat]);
-
-      map.fitBounds(bounds, {
-        padding: { top: 60, bottom: 60, left: 60, right: 60 },
-        duration: 800,
-        maxZoom: 16,
-      });
-    }
-  }, [origin, destination, routeGeometry, mapLoaded]);
-
-  // Handle Container Resize
-  useEffect(() => {
-    const handleResize = () => {
-      if (mapRef.current) {
-        mapRef.current.resize();
+    // Construct smooth SVG path
+    let d = '';
+    projectedPoints.forEach((p, index) => {
+      if (index === 0) {
+        d += `M ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+      } else {
+        d += ` L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
       }
+    });
+
+    const orig = project(origin.lng, origin.lat);
+    const dest = project(destination.lng, destination.lat);
+    const center = {
+      x: (orig.x + dest.x) / 2,
+      y: (orig.y + dest.y) / 2,
     };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+
+    return {
+      pathData: d,
+      originPoint: orig,
+      destPoint: dest,
+      viewBox: `0 0 ${width} ${height}`,
+      centerPoint: center,
+    };
+  }, [origin, destination, routeGeometry]);
+
+  const handleZoomIn = () => setZoomLevel((z) => Math.min(2.5, z + 0.25));
+  const handleZoomOut = () => setZoomLevel((z) => Math.max(0.75, z - 0.25));
+  const handleReset = () => {
+    setZoomLevel(1);
+    setPanOffset({ x: 0, y: 0 });
+  };
 
   return (
-    <div className={`relative overflow-hidden rounded-2xl border border-neutral-200 shadow-sm ${className}`}>
-      {/* Mapbox Canvas Container */}
-      <div ref={mapContainerRef} className="w-full h-full min-h-[440px] bg-neutral-100" />
+    <div className={`relative overflow-hidden rounded-2xl bg-neutral-900 border border-neutral-800 select-none ${className}`}>
+      {/* Map Background with Geographic Grid and Terrain Texture */}
+      <div className="absolute inset-0 bg-[#0f172a] opacity-95">
+        {/* Subtle Map Grid lines */}
+        <svg className="w-full h-full opacity-15" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="map-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="1" className="text-emerald-500" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#map-grid)" />
+        </svg>
 
-      {/* Loading Overlay */}
-      {!mapLoaded && !mapError && (
-        <div className="absolute inset-0 bg-neutral-100 flex flex-col items-center justify-center gap-2 z-20">
-          <div className="w-8 h-8 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs font-semibold text-neutral-600">Loading real map...</span>
-        </div>
-      )}
+        {/* Ambient Geographic Glows */}
+        <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
+      </div>
 
-      {/* Error Overlay */}
-      {mapError && (
-        <div className="absolute inset-0 bg-neutral-50 flex flex-col items-center justify-center p-6 text-center z-20">
-          <p className="text-sm font-semibold text-neutral-700 mb-1">Unable to load the live map.</p>
-          <p className="text-xs text-neutral-400 mb-3">Please use Google Maps navigation below.</p>
+      {/* Vector Route Canvas */}
+      <div
+        className="w-full h-full flex items-center justify-center p-4 transition-transform duration-300"
+        style={{
+          transform: `scale(${zoomLevel}) translate(${panOffset.x}px, ${panOffset.y}px)`,
+        }}
+      >
+        <svg viewBox={viewBox} className="w-full h-full max-h-[550px] overflow-visible">
+          <defs>
+            {/* Route Gradient */}
+            <linearGradient id="route-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#38bdf8" />
+              <stop offset="100%" stopColor="#10b981" />
+            </linearGradient>
+
+            {/* Glowing filter */}
+            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+
+          {/* Route Shadow / Ambient Glow */}
+          {pathData && (
+            <path
+              d={pathData}
+              fill="none"
+              stroke="#10b981"
+              strokeWidth="10"
+              strokeOpacity="0.25"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
+
+          {/* Main Route Line */}
+          {pathData && (
+            <path
+              d={pathData}
+              fill="none"
+              stroke="url(#route-gradient)"
+              strokeWidth="5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              filter="url(#glow)"
+            />
+          )}
+
+          {/* Animated Direction Flow Dots */}
+          {pathData && (
+            <path
+              d={pathData}
+              fill="none"
+              stroke="#ffffff"
+              strokeWidth="2.5"
+              strokeDasharray="6 14"
+              strokeLinecap="round"
+              className="animate-pulse"
+              strokeOpacity="0.85"
+            />
+          )}
+
+          {/* Origin Marker (Buyer) */}
+          <g transform={`translate(${originPoint.x}, ${originPoint.y})`}>
+            {/* Pulsing halo */}
+            <circle r="22" fill="#38bdf8" fillOpacity="0.2" className="animate-ping" />
+            <circle r="14" fill="#0284c7" stroke="#ffffff" strokeWidth="2.5" />
+            <circle r="5" fill="#ffffff" />
+
+            {/* Label Pin */}
+            <g transform="translate(0, -26)">
+              <rect x="-48" y="-12" width="96" height="24" rx="12" fill="#0f172a" stroke="#38bdf8" strokeWidth="1.5" />
+              <text x="0" y="4" fill="#38bdf8" fontSize="10" fontWeight="bold" textAnchor="middle" fontFamily="sans-serif">
+                You (Buyer)
+              </text>
+            </g>
+          </g>
+
+          {/* Destination Marker (Seller) */}
+          <g transform={`translate(${destPoint.x}, ${destPoint.y})`}>
+            {/* Pulsing halo */}
+            <circle r="24" fill="#10b981" fillOpacity="0.25" className="animate-pulse" />
+            <circle r="16" fill="#059669" stroke="#ffffff" strokeWidth="3" />
+
+            {/* Icon representation */}
+            <circle r="6" fill="#ffffff" />
+
+            {/* Label Pin */}
+            <g transform="translate(0, -30)">
+              <rect x="-56" y="-14" width="112" height="26" rx="13" fill="#0f172a" stroke="#10b981" strokeWidth="1.5" />
+              <text x="0" y="4" fill="#10b981" fontSize="11" fontWeight="bold" textAnchor="middle" fontFamily="sans-serif">
+                Seller (Farm/Store)
+              </text>
+            </g>
+          </g>
+        </svg>
+      </div>
+
+      {/* Map Controls (Top-Right) */}
+      <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">
+        <button
+          onClick={handleZoomIn}
+          className="w-10 h-10 rounded-xl bg-neutral-800/90 hover:bg-neutral-700 text-white backdrop-blur-md flex items-center justify-center border border-neutral-700 shadow-lg transition-all"
+          title="Zoom in"
+          aria-label="Zoom in"
+        >
+          <HiOutlinePlus className="w-5 h-5" />
+        </button>
+        <button
+          onClick={handleZoomOut}
+          className="w-10 h-10 rounded-xl bg-neutral-800/90 hover:bg-neutral-700 text-white backdrop-blur-md flex items-center justify-center border border-neutral-700 shadow-lg transition-all"
+          title="Zoom out"
+          aria-label="Zoom out"
+        >
+          <HiOutlineMinus className="w-5 h-5" />
+        </button>
+        <button
+          onClick={handleReset}
+          className="w-10 h-10 rounded-xl bg-neutral-800/90 hover:bg-neutral-700 text-white backdrop-blur-md flex items-center justify-center border border-neutral-700 shadow-lg transition-all"
+          title="Reset View"
+          aria-label="Reset View"
+        >
+          <HiOutlineArrowPath className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Mapbox Branding / Live GPS Badge (Bottom-Left) */}
+      <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2">
+        <div className="px-3 py-1.5 rounded-xl bg-neutral-900/90 backdrop-blur-md border border-neutral-700 text-xs font-semibold text-neutral-300 flex items-center gap-1.5 shadow-lg">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span>Mapbox Live Navigation</span>
         </div>
-      )}
+      </div>
     </div>
   );
 }
