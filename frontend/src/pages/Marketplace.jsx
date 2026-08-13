@@ -14,14 +14,14 @@ import { CATEGORIES, CONDITIONS, SELLER_TYPES, RADIUS_OPTIONS, SORT_OPTIONS } fr
 import { setProducts, setLoading, setError } from '../features/products/productsSlice';
 import useLocation from '../hooks/useLocation';
 import useDebounce from '../hooks/useDebounce';
-import { listProducts } from '../services/productsApi';
+import { listProducts, getNearbyProducts } from '../services/productsApi';
 
 export default function Marketplace() {
   const dispatch = useDispatch();
   const [searchParams] = useSearchParams();
   const products = useSelector((state) => state.products.items);
   const isLoading = useSelector((state) => state.products.isLoading);
-  const { radius, changeRadius, locationName, requestLocation } = useLocation();
+  const { radius, changeRadius, locationName, latitude, longitude, requestLocation } = useLocation();
 
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
   const [showFilters, setShowFilters] = useState(false);
@@ -39,15 +39,40 @@ export default function Marketplace() {
     async function fetchFilteredProducts() {
       dispatch(setLoading(true));
       try {
-        const res = await listProducts({
-          search: debouncedSearch || undefined,
-          category: selectedCategory || undefined,
-          condition: selectedCondition || undefined,
-          minPrice: priceMin || undefined,
-          maxPrice: priceMax || undefined,
-          sort: selectedSort === 'price_low' ? 'price-low' : selectedSort === 'price_high' ? 'price-high' : 'newest',
-        });
-        dispatch(setProducts(res.products || []));
+        if (selectedSort === 'nearest' && latitude != null && longitude != null) {
+          const nearby = await getNearbyProducts({
+            lat: latitude,
+            lng: longitude,
+            radius: radius || 10,
+          });
+          let filtered = nearby || [];
+          if (debouncedSearch) {
+            filtered = filtered.filter(p => p.title?.toLowerCase().includes(debouncedSearch.toLowerCase()) || p.description?.toLowerCase().includes(debouncedSearch.toLowerCase()));
+          }
+          if (selectedCategory) {
+            filtered = filtered.filter(p => p.category?.slug === selectedCategory || p.category_id === selectedCategory);
+          }
+          if (selectedCondition) {
+            filtered = filtered.filter(p => p.condition === selectedCondition);
+          }
+          if (priceMin) {
+            filtered = filtered.filter(p => Number(p.price) >= Number(priceMin));
+          }
+          if (priceMax) {
+            filtered = filtered.filter(p => Number(p.price) <= Number(priceMax));
+          }
+          dispatch(setProducts(filtered));
+        } else {
+          const res = await listProducts({
+            search: debouncedSearch || undefined,
+            category: selectedCategory || undefined,
+            condition: selectedCondition || undefined,
+            minPrice: priceMin || undefined,
+            maxPrice: priceMax || undefined,
+            sort: selectedSort === 'price_low' ? 'price-low' : selectedSort === 'price_high' ? 'price-high' : 'newest',
+          });
+          dispatch(setProducts(res.products || []));
+        }
       } catch (err) {
         dispatch(setError(err?.message || 'Failed to load products'));
         dispatch(setProducts([]));
@@ -56,7 +81,7 @@ export default function Marketplace() {
       }
     }
     fetchFilteredProducts();
-  }, [dispatch, debouncedSearch, selectedCategory, selectedCondition, selectedSellerType, priceMin, priceMax, selectedSort]);
+  }, [dispatch, debouncedSearch, selectedCategory, selectedCondition, selectedSellerType, priceMin, priceMax, selectedSort, latitude, longitude, radius]);
 
   const activeFilterCount = [selectedCategory, selectedCondition, selectedSellerType, priceMin, priceMax].filter(Boolean).length;
 
