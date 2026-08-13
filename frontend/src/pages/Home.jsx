@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
-import { useSelector, useDispatch } from 'react-redux';
+import { useSelector } from 'react-redux';
 import { useState, useEffect } from 'react';
 import {
   HiOutlineMagnifyingGlass,
@@ -14,7 +14,6 @@ import Button from '../components/common/Button';
 import { CATEGORIES } from '../utils/constants';
 import useLocation from '../hooks/useLocation';
 import { listProducts, getNearbyProducts } from '../services/productsApi';
-import { setProducts, setLoading } from '../features/products/productsSlice';
 
 const fadeInUp = {
   initial: { opacity: 0, y: 30 },
@@ -32,39 +31,55 @@ const stagger = {
 
 export default function Home() {
   const navigate = useNavigate();
-  const dispatch = useDispatch();
   const [searchQuery, setSearchQuery] = useState('');
-  const products = useSelector((state) => state.products.items);
-  const isLoading = useSelector((state) => state.products.isLoading);
   const { isAuthenticated } = useSelector((state) => state.auth);
-  const { locationName, radius, requestLocation, permissionStatus, userLocation } = useLocation();
+  const { locationName, radius, latitude, longitude, requestLocation, permissionStatus, isLoading: isLocating } = useLocation();
 
+  const [nearbyProducts, setNearbyProducts] = useState([]);
+  const [recentProducts, setRecentProducts] = useState([]);
+  const [isLoadingNearby, setIsLoadingNearby] = useState(true);
+  const [isLoadingRecent, setIsLoadingRecent] = useState(true);
+
+  // Load genuine Nearby Products using user coordinates
   useEffect(() => {
-    async function loadHomeProducts() {
-      dispatch(setLoading(true));
-      try {
-        if (userLocation?.lat && userLocation?.lng) {
+    async function loadNearby() {
+      if (latitude != null && longitude != null) {
+        setIsLoadingNearby(true);
+        try {
           const nearby = await getNearbyProducts({
-            lat: userLocation.lat,
-            lng: userLocation.lng,
+            lat: latitude,
+            lng: longitude,
             radius: radius || 10,
           });
-          dispatch(setProducts(nearby));
-        } else {
-          const res = await listProducts({ limit: 12 });
-          dispatch(setProducts(res.products || []));
+          setNearbyProducts(nearby || []);
+        } catch {
+          setNearbyProducts([]);
+        } finally {
+          setIsLoadingNearby(false);
         }
-      } catch {
-        dispatch(setProducts([]));
-      } finally {
-        dispatch(setLoading(false));
+      } else {
+        setNearbyProducts([]);
+        setIsLoadingNearby(false);
       }
     }
-    loadHomeProducts();
-  }, [dispatch, userLocation, radius]);
+    loadNearby();
+  }, [latitude, longitude, radius]);
 
-  const nearbyProducts = [...products].slice(0, 4);
-  const recentProducts = [...products].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 4);
+  // Load genuine Recently Added Products from database
+  useEffect(() => {
+    async function loadRecent() {
+      setIsLoadingRecent(true);
+      try {
+        const res = await listProducts({ limit: 8, sort: 'newest' });
+        setRecentProducts(res?.products || []);
+      } catch {
+        setRecentProducts([]);
+      } finally {
+        setIsLoadingRecent(false);
+      }
+    }
+    loadRecent();
+  }, []);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -74,6 +89,8 @@ export default function Home() {
       navigate('/marketplace');
     }
   };
+
+  const hasLocation = latitude != null && longitude != null;
 
   return (
     <div className="min-h-screen">
@@ -98,64 +115,54 @@ export default function Home() {
               className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/20 backdrop-blur-sm text-white text-sm font-medium mb-6"
             >
               <HiOutlineMapPin className="w-4 h-4" />
-              Hyperlocal Marketplace
+              <span>{locationName || 'Hyperlocal Village Marketplace'}</span>
             </motion.div>
 
-            <h1 className="text-3xl sm:text-5xl font-extrabold text-white mb-4 leading-tight">
-              Buy & Sell From
+            <motion.h1
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight leading-tight mb-4"
+            >
+              Buy & Sell Fresh from
               <br />
-              <span className="text-primary-100">People Near You</span>
-            </h1>
-            <p className="text-primary-100/90 text-base sm:text-lg mb-8 max-w-lg mx-auto">
-              A village-to-city marketplace connecting communities. Discover products within your neighbourhood.
-            </p>
+              <span className="text-accent-300">Gaon to City</span>
+            </motion.h1>
+
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="text-base sm:text-lg text-primary-100 mb-8 max-w-xl mx-auto"
+            >
+              Discover authentic rural products, fresh farm produce, and local handcrafted goods directly from verified sellers.
+            </motion.p>
 
             {/* Search Bar */}
-            <form onSubmit={handleSearch} className="relative max-w-lg mx-auto mb-6">
-              <HiOutlineMagnifyingGlass className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400" />
-              <input
-                type="text"
-                placeholder="Search for wheat, ghee, handicrafts..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-28 py-3.5 sm:py-4 rounded-2xl bg-white text-neutral-800 text-sm sm:text-base placeholder:text-neutral-400 focus:outline-none focus:ring-4 focus:ring-white/30 shadow-xl"
-              />
-              <button
-                type="submit"
-                className="absolute right-2 top-1/2 -translate-y-1/2 px-5 py-2 sm:py-2.5 rounded-xl bg-primary-500 text-white text-sm font-semibold hover:bg-primary-600 transition-colors"
-              >
-                Search
-              </button>
-            </form>
-
-            {/* Location */}
-            <div className="flex items-center justify-center gap-3">
-              {permissionStatus === 'granted' && locationName ? (
-                <span className="flex items-center gap-1.5 text-white/80 text-sm">
-                  <HiOutlineMapPin className="w-4 h-4" />
-                  {locationName} • {radius} km radius
-                </span>
-              ) : (
-                <button
-                  onClick={requestLocation}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/20 backdrop-blur-sm text-white text-sm font-medium hover:bg-white/30 transition-colors"
-                >
-                  <HiOutlineMapPin className="w-4 h-4" />
-                  Enable Location
-                </button>
-              )}
-            </div>
+            <motion.form
+              onSubmit={handleSearch}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className="relative max-w-lg mx-auto"
+            >
+              <div className="flex items-center bg-white rounded-2xl shadow-xl p-1.5 border border-white/20">
+                <div className="pl-4 text-neutral-400">
+                  <HiOutlineMagnifyingGlass className="w-5 h-5" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search wheat, mangoes, handicrafts..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full px-3 py-2.5 text-neutral-800 text-sm placeholder-neutral-400 bg-transparent border-none focus:outline-none"
+                />
+                <Button type="submit" variant="primary" size="md">
+                  Search
+                </Button>
+              </div>
+            </motion.form>
           </motion.div>
-        </div>
-
-        {/* Wave */}
-        <div className="absolute bottom-0 left-0 right-0">
-          <svg viewBox="0 0 1440 80" fill="none" className="w-full">
-            <path
-              d="M0,40 C360,80 1080,0 1440,40 L1440,80 L0,80 Z"
-              fill="var(--color-neutral-50)"
-            />
-          </svg>
         </div>
       </section>
 
@@ -204,31 +211,62 @@ export default function Home() {
                 Nearby Products
               </h2>
               <p className="text-sm text-neutral-500 mt-0.5">
-                Within {radius || 10} km of your location
+                {hasLocation
+                  ? `Within ${radius || 10} km of ${locationName || 'your location'}`
+                  : 'Discover authentic goods listed near your village or city'}
               </p>
             </div>
-            <Link
-              to="/marketplace?sort=nearest"
-              className="text-sm font-medium text-primary-600 hover:text-primary-700 flex items-center gap-1"
-            >
-              See all <HiOutlineArrowRight className="w-4 h-4" />
-            </Link>
+            {hasLocation && (
+              <Link
+                to="/marketplace?sort=nearest"
+                className="text-sm font-medium text-primary-600 hover:text-primary-700 flex items-center gap-1"
+              >
+                See all <HiOutlineArrowRight className="w-4 h-4" />
+              </Link>
+            )}
           </div>
         </motion.div>
 
-        {isLoading ? (
+        {isLoadingNearby ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[1, 2, 3, 4].map((n) => (
               <div key={n} className="h-64 rounded-2xl skeleton" />
             ))}
           </div>
+        ) : !hasLocation ? (
+          <div className="bg-white rounded-2xl border border-neutral-100 p-8 text-center max-w-lg mx-auto shadow-xs">
+            <div className="w-12 h-12 rounded-full bg-primary-50 text-primary-600 flex items-center justify-center mx-auto mb-3">
+              <HiOutlineMapPin className="w-6 h-6" />
+            </div>
+            <h3 className="font-semibold text-neutral-800 mb-1">Set Your Location</h3>
+            <p className="text-neutral-500 text-sm mb-4">
+              Enable GPS or choose your area to find products directly available in your vicinity.
+            </p>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={requestLocation}
+              isLoading={isLocating}
+              icon={<HiOutlineMapPin className="w-4 h-4" />}
+            >
+              Use Current Location
+            </Button>
+          </div>
         ) : nearbyProducts.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-neutral-100 p-8 text-center">
-            <p className="text-neutral-500 text-sm">No products listed near you yet.</p>
+          <div className="bg-white rounded-2xl border border-neutral-100 p-8 text-center max-w-lg mx-auto shadow-xs">
+            <p className="text-neutral-700 font-medium text-sm mb-1">No nearby products found within {radius || 10} km</p>
+            <p className="text-neutral-400 text-xs mb-4">Try expanding your search radius or explore all products.</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/marketplace')}
+            >
+              Browse All Marketplace Products
+            </Button>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-            {nearbyProducts.map((product, index) => (
+            {nearbyProducts.slice(0, 4).map((product, index) => (
               <ProductCard key={product.id} product={product} index={index} />
             ))}
           </div>
@@ -251,13 +289,19 @@ export default function Home() {
           </div>
         </motion.div>
 
-        {recentProducts.length === 0 ? (
+        {isLoadingRecent ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((n) => (
+              <div key={n} className="h-64 rounded-2xl skeleton" />
+            ))}
+          </div>
+        ) : recentProducts.length === 0 ? (
           <div className="bg-white rounded-2xl border border-neutral-100 p-8 text-center">
             <p className="text-neutral-500 text-sm">No products available.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-            {recentProducts.map((product, index) => (
+            {recentProducts.slice(0, 4).map((product, index) => (
               <ProductCard key={product.id} product={product} index={index} />
             ))}
           </div>

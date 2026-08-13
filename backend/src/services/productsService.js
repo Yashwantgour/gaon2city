@@ -272,22 +272,82 @@ export async function getProductById(id) {
 }
 
 /**
- * Nearby products using PostGIS.
+ * Haversine formula to compute great-circle distance between two points in km.
+ */
+function getHaversineDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Earth's radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/**
+ * Nearby products using Haversine calculation with seller & image joins.
  */
 export async function getNearbyProducts({ lat, lng, radius = 10 }) {
-  const radiusMeters = radius * 1000;
+  const userLat = parseFloat(lat);
+  const userLng = parseFloat(lng);
+  const radiusKm = parseFloat(radius) || 10;
 
-  const { data, error } = await supabaseAdmin.rpc('get_nearby_products', {
-    user_lat: parseFloat(lat),
-    user_lng: parseFloat(lng),
-    radius_meters: radiusMeters,
-  });
-
-  if (error) {
-    throw ApiError.internal('Failed to fetch nearby products');
+  if (isNaN(userLat) || isNaN(userLng)) {
+    return [];
   }
 
-  return data || [];
+  // Try PostGIS RPC first if available
+  try {
+    const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc('get_nearby_products', {
+      user_lat: userLat,
+      user_lng: userLng,
+      radius_meters: radiusKm * 1000,
+    });
+
+    if (!rpcError && Array.isArray(rpcData) && rpcData.length > 0) {
+      return rpcData;
+    }
+  } catch {
+    // Fall back to Haversine
+  }
+
+  // Haversine fallback across active products
+  const { data, error } = await supabaseAdmin
+    .from('products')
+    .select(`
+      *,
+      category:categories(id, name, slug),
+      seller:profiles!seller_id(id, name, seller_type, avatar_url, village, city),
+      images:product_images(id, storage_path, display_order)
+    `)
+    .eq('status', 'active');
+
+  if (error || !data) {
+    return [];
+  }
+
+  const nearby = [];
+
+  for (const prod of data) {
+    const prodLat = prod.latitude != null ? parseFloat(prod.latitude) : null;
+    const prodLng = prod.longitude != null ? parseFloat(prod.longitude) : null;
+
+    if (prodLat != null && prodLng != null && !isNaN(prodLat) && !isNaN(prodLng)) {
+      const dist = getHaversineDistance(userLat, userLng, prodLat, prodLng);
+      if (dist <= radiusKm) {
+        nearby.push({
+          ...prod,
+          distance: parseFloat(dist.toFixed(1)),
+        });
+      }
+    }
+  }
+
+  return nearby.sort((a, b) => (a.distance || 0) - (b.distance || 0));
 }
 
 /**
