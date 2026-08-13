@@ -9,7 +9,8 @@ const router = Router();
 // POST /api/reviews — create review (auth required)
 router.post('/', authenticate, createReviewValidators, validate, reviewsController.createReview);
 
-// GET /api/sellers/:id/reviews — get seller reviews (public)
+// GET /api/reviews/sellers/:id/reviews & /api/reviews/seller/:id — get seller reviews (public)
 router.get('/sellers/:id/reviews', sellerIdValidator, validate, reviewsController.getSellerReviews);
+router.get('/seller/:id', sellerIdValidator, validate, reviewsController.getSellerReviews);
 
 export default router;
