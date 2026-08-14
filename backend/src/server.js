@@ -43,9 +43,19 @@ app.use(
 
 // --------------- CORS Configuration ---------------
 
-const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
+const defaultAllowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+  'https://gaon2city.vercel.app',
+];
+
+const envAllowedOrigins = (process.env.CLIENT_URL || '')
   .split(',')
-  .map((url) => url.trim());
+  .map((url) => url.trim())
+  .filter(Boolean);
+
+const allowedOrigins = Array.from(new Set([...defaultAllowedOrigins, ...envAllowedOrigins]));
 
 app.use(
   cors({
@@ -54,7 +64,15 @@ app.use(
       if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
         return callback(null, true);
       }
-      return callback(new Error('Blocked by CORS policy'));
+      try {
+        const parsedUrl = new URL(origin);
+        if (parsedUrl.hostname.endsWith('.vercel.app')) {
+          return callback(null, true);
+        }
+      } catch {
+        // invalid URL format
+      }
+      return callback(new Error(`Blocked by CORS policy for origin: ${origin}`));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
