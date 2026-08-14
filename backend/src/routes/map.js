@@ -11,4 +11,10 @@ router.get('/route', routeValidators, validate, mapController.getRoute);
 // GET /api/map/config
 router.get('/config', mapController.getMapConfig);
 
+// GET /api/map/geocode?q=...
+router.get('/geocode', mapController.geocode);
+
+// GET /api/map/reverse?lat=...&lng=...
+router.get('/reverse', mapController.reverseGeocode);
+
 export default router;

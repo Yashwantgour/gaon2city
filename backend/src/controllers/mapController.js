@@ -23,3 +23,27 @@ export async function getMapConfig(req, res, next) {
     next(err);
   }
 }
+
+/**
+ * GET /api/map/geocode?q=...
+ */
+export async function geocode(req, res, next) {
+  try {
+    const results = await mapService.geocodeAddress(req.query.q);
+    res.json(results);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/map/reverse?lat=...&lng=...
+ */
+export async function reverseGeocode(req, res, next) {
+  try {
+    const result = await mapService.reverseGeocode(req.query);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}

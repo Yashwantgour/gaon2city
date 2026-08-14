@@ -11,8 +11,10 @@ import {
   HiOutlineMapPin,
   HiOutlinePlus,
   HiOutlineChatBubbleLeftRight,
+  HiChevronRight,
 } from 'react-icons/hi2';
 import { selectCartCount } from '../../features/cart/cartSlice';
+import { openLocationDrawer } from '../../features/location/locationSlice';
 import { listConversations } from '../../services/conversationsApi';
 import Button from '../common/Button';
 
@@ -48,26 +50,41 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 shrink-0">
-            <div className="w-9 h-9 rounded-xl bg-primary-500 flex items-center justify-center">
-              <span className="text-white font-bold text-lg">G</span>
-            </div>
-            <div className="hidden sm:block">
-              <span className="text-lg font-bold text-neutral-800">
-                Gaon<span className="text-primary-500">2</span>City
-              </span>
-            </div>
-          </Link>
+          <div className="flex items-center gap-3 shrink-0">
+            <Link to="/" className="flex items-center gap-2 shrink-0">
+              <div className="w-9 h-9 rounded-xl bg-primary-500 flex items-center justify-center shadow-xs">
+                <span className="text-white font-bold text-lg">G</span>
+              </div>
+              <div className="hidden sm:block">
+                <span className="text-lg font-bold text-neutral-800">
+                  Gaon<span className="text-primary-500">2</span>City
+                </span>
+              </div>
+            </Link>
 
-          {/* Location Indicator — Desktop */}
-          <button
-            onClick={() => navigate('/marketplace')}
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-50 text-primary-700 text-sm font-medium hover:bg-primary-100 transition-colors"
-          >
-            <HiOutlineMapPin className="w-4 h-4" />
-            <span>{locationName || 'Set Location'}</span>
-            {radius && <span className="text-primary-500">• {radius} km</span>}
-          </button>
+            {/* Location Selector Indicator — Desktop (Flipkart-Style Interactive Badge) */}
+            <button
+              onClick={() => dispatch(openLocationDrawer())}
+              className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-primary-50/80 hover:bg-primary-100 text-primary-800 text-xs font-semibold transition-all border border-primary-200/70 shadow-2xs group cursor-pointer"
+              title="Select delivery location"
+            >
+              <div className="w-6 h-6 rounded-lg bg-primary-500 text-white flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <HiOutlineMapPin className="w-3.5 h-3.5" />
+              </div>
+              <div className="flex flex-col items-start text-left">
+                <span className="text-[10px] text-primary-700 font-medium">Deliver to</span>
+                <span className="font-bold text-neutral-900 truncate max-w-[130px]">
+                  {locationName || 'Set Location'}
+                </span>
+              </div>
+              {radius && (
+                <span className="text-[10px] font-extrabold bg-primary-200/80 text-primary-900 px-1.5 py-0.5 rounded-md ml-0.5">
+                  {radius} km
+                </span>
+              )}
+              <HiChevronRight className="w-3.5 h-3.5 text-primary-500 group-hover:translate-x-0.5 transition-transform" />
+            </button>
+          </div>
 
           {/* Search — Desktop */}
           <div className="hidden md:flex flex-1 max-w-md mx-4">
@@ -83,6 +100,16 @@ export default function Navbar() {
               />
             </div>
           </div>
+
+          {/* Location Indicator — Mobile */}
+          <button
+            onClick={() => dispatch(openLocationDrawer())}
+            className="flex md:hidden items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-50 text-primary-700 text-xs font-semibold border border-primary-200/60 max-w-[160px] truncate"
+          >
+            <HiOutlineMapPin className="w-3.5 h-3.5 text-primary-600 shrink-0" />
+            <span className="truncate">{locationName || 'Set Location'}</span>
+            <span className="text-[10px] text-primary-600 font-bold">• {radius || 10}km</span>
+          </button>
 
           {/* Actions — Desktop */}
           <div className="hidden md:flex items-center gap-2">
@@ -186,73 +213,108 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile Dropdown Menu */}
+      {/* Mobile Menu Dropdown */}
       <AnimatePresence>
         {mobileMenuOpen && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="md:hidden border-t border-neutral-100 bg-white overflow-hidden"
+            className="md:hidden border-t border-neutral-200/60 bg-white/95 backdrop-blur-md px-4 py-4 space-y-3"
           >
-            <div className="px-4 py-3 space-y-2">
-              {/* Search */}
-              <div className="relative">
-                <HiOutlineMagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                <input
-                  type="text"
-                  placeholder="Search products..."
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
-                  onFocus={() => {
-                    navigate('/marketplace');
-                    setMobileMenuOpen(false);
-                  }}
-                />
-              </div>
-
-              {/* Location */}
-              <button
-                onClick={() => {
-                  navigate('/marketplace');
+            {/* Mobile Search */}
+            <div className="relative">
+              <HiOutlineMagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+              <input
+                type="text"
+                placeholder="Search products..."
+                className="w-full pl-10 pr-4 py-2 rounded-xl border border-neutral-200 bg-neutral-50 text-sm"
+                onFocus={() => {
                   setMobileMenuOpen(false);
+                  navigate('/marketplace');
                 }}
-                className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm text-neutral-700 hover:bg-neutral-50"
-              >
-                <HiOutlineMapPin className="w-4 h-4 text-primary-500" />
-                {locationName || 'Set Location'} {radius && `• ${radius} km`}
-              </button>
-
-              <div className="border-t border-neutral-100 pt-2 space-y-1">
-                {isAuthenticated ? (
-                  <>
-                    <Link
-                      to="/sell"
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-primary-600 hover:bg-primary-50"
-                    >
-                      <HiOutlinePlus className="w-4 h-4" />
-                      Sell a Product
-                    </Link>
-                    <Link
-                      to="/profile"
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm text-neutral-700 hover:bg-neutral-50"
-                    >
-                      <HiOutlineUser className="w-4 h-4" />
-                      My Profile
-                    </Link>
-                  </>
-                ) : (
-                  <Link
-                    to="/login"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-primary-600 hover:bg-primary-50"
-                  >
-                    Login / Sign Up
-                  </Link>
-                )}
-              </div>
+              />
             </div>
+
+            {/* Mobile Location Selector Button */}
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                dispatch(openLocationDrawer());
+              }}
+              className="w-full flex items-center justify-between p-3 rounded-xl bg-primary-50 text-primary-800 text-sm font-semibold border border-primary-100"
+            >
+              <div className="flex items-center gap-2">
+                <HiOutlineMapPin className="w-4 h-4 text-primary-600" />
+                <span>{locationName || 'Set delivery location'}</span>
+              </div>
+              <span className="text-xs bg-primary-200/80 px-2 py-0.5 rounded-full font-bold">
+                {radius || 10} km ›
+              </span>
+            </button>
+
+            <div className="space-y-1 pt-1">
+              <Link
+                to="/marketplace"
+                className="block px-3 py-2 rounded-lg text-sm text-neutral-700 hover:bg-neutral-100"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Marketplace
+              </Link>
+              {isAuthenticated && (
+                <>
+                  <Link
+                    to="/chat"
+                    className="flex items-center justify-between px-3 py-2 rounded-lg text-sm text-neutral-700 hover:bg-neutral-100"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <span>Messages</span>
+                    {unreadMsgCount > 0 && (
+                      <span className="px-1.5 py-0.5 bg-primary-500 text-white rounded-full text-xs font-bold">
+                        {unreadMsgCount}
+                      </span>
+                    )}
+                  </Link>
+                  <Link
+                    to="/sell"
+                    className="block px-3 py-2 rounded-lg text-sm text-neutral-700 hover:bg-neutral-100"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Sell Product
+                  </Link>
+                  <Link
+                    to="/seller/dashboard"
+                    className="block px-3 py-2 rounded-lg text-sm text-neutral-700 hover:bg-neutral-100"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Seller Dashboard
+                  </Link>
+                  <Link
+                    to="/profile"
+                    className="block px-3 py-2 rounded-lg text-sm text-neutral-700 hover:bg-neutral-100"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Profile
+                  </Link>
+                </>
+              )}
+            </div>
+
+            {!isAuthenticated && (
+              <div className="pt-2">
+                <Button
+                  variant="primary"
+                  size="md"
+                  className="w-full"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    navigate('/login');
+                  }}
+                >
+                  Login / Register
+                </Button>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

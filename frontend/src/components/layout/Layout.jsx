@@ -4,6 +4,7 @@ import Navbar from './Navbar';
 import Footer from './Footer';
 import MobileNav from './MobileNav';
 import Toast from '../common/Toast';
+import LocationDrawer from '../location/LocationDrawer';
 
 export default function Layout() {
   const { pathname, search } = useLocation();
@@ -22,6 +23,7 @@ export default function Layout() {
       <Footer />
       <MobileNav />
       <Toast />
+      <LocationDrawer />
     </div>
   );
 }
