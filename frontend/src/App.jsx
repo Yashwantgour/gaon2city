@@ -20,6 +20,7 @@ import Chat from './pages/Chat';
 import Directions from './pages/Directions';
 import AdminDashboard from './pages/AdminDashboard';
 import NotFound from './pages/NotFound';
+import ErrorBoundary from './components/common/ErrorBoundary';
 import { supabase } from './services/supabase';
 import { getMe } from './services/authApi';
 import { loginSuccess, logout, setLoading } from './features/auth/authSlice';
@@ -97,7 +98,9 @@ function AppRoutes() {
 export default function App() {
   return (
     <Provider store={store}>
-      <AppRoutes />
+      <ErrorBoundary>
+        <AppRoutes />
+      </ErrorBoundary>
     </Provider>
   );
 }

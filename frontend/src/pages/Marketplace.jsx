@@ -9,12 +9,9 @@ import {
   HiChevronLeft,
   HiChevronRight,
   HiOutlineMapPin,
-  HiOutlineSquares2X2,
-  HiOutlineMap,
   HiOutlineXMark,
 } from 'react-icons/hi2';
 import ProductGrid from '../components/product/ProductGrid';
-import MarketplaceMap from '../components/map/MarketplaceMap';
 import { listProducts, getNearbyProducts } from '../services/productsApi';
 import { setProducts, setLoading, setError } from '../features/products/productsSlice';
 import useLocation from '../hooks/useLocation';
@@ -47,7 +44,6 @@ export default function Marketplace() {
   const [searchInput, setSearchInput] = useState(urlSearch);
   const [showFilters, setShowFilters] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'map'
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(urlCategory);
@@ -249,46 +245,17 @@ export default function Marketplace() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
-      {/* Header & View Mode Switcher */}
+      {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
       >
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-neutral-900 tracking-tight">
-            Marketplace
-          </h1>
-          <p className="text-sm text-neutral-500 mt-0.5">
-            Discover authentic rural produce, crafts, and goods from verified local producers
-          </p>
-        </div>
-
-        {/* View Mode Switcher (Grid vs Map) */}
-        <div className="flex items-center gap-1 p-1 bg-neutral-100 rounded-2xl self-start sm:self-auto border border-neutral-200/60 shadow-2xs">
-          <button
-            onClick={() => setViewMode('grid')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              viewMode === 'grid'
-                ? 'bg-white text-primary-700 shadow-xs'
-                : 'text-neutral-600 hover:text-neutral-900'
-            }`}
-          >
-            <HiOutlineSquares2X2 className="w-4 h-4" />
-            <span>Grid View</span>
-          </button>
-          <button
-            onClick={() => setViewMode('map')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              viewMode === 'map'
-                ? 'bg-white text-primary-700 shadow-xs'
-                : 'text-neutral-600 hover:text-neutral-900'
-            }`}
-          >
-            <HiOutlineMap className="w-4 h-4" />
-            <span>Map View</span>
-          </button>
-        </div>
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-neutral-900 tracking-tight">
+          Marketplace
+        </h1>
+        <p className="text-sm text-neutral-500 mt-0.5">
+          Discover authentic rural produce, crafts, and goods from verified local producers
+        </p>
       </motion.div>
 
       {/* Search & Main Controls Bar */}
@@ -559,17 +526,8 @@ export default function Marketplace() {
         </div>
       </div>
 
-      {/* Main View: Grid vs Interactive Map */}
-      {viewMode === 'map' ? (
-        <MarketplaceMap
-          products={products}
-          userLocation={{ latitude, longitude }}
-          radius={radius}
-          className="h-[580px] w-full"
-        />
-      ) : (
-        <ProductGrid products={products} isLoading={isLoading} />
-      )}
+      {/* Product Grid */}
+      <ProductGrid products={products} isLoading={isLoading} />
     </div>
   );
 }
