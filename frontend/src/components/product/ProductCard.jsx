@@ -16,13 +16,24 @@ import { showToast } from '../../features/ui/uiSlice';
 export default function ProductCard({ product, index = 0 }) {
   const dispatch = useDispatch();
   const [isFavorite, setIsFavorite] = useState(false);
-  const [imgError, setImgError] = useState(false);
+  const [activeImgIndex, setActiveImgIndex] = useState(0);
+  const [allImagesFailed, setAllImagesFailed] = useState(false);
 
   const isOutOfStock = isProductOutOfStock(product);
 
-  const imageSource = typeof product.images?.[0] === 'string'
-    ? product.images[0]
-    : product.images?.[0]?.storage_path;
+  const rawImages = (product.images || [])
+    .map((img) => (typeof img === 'string' ? img : img?.storage_path))
+    .filter(Boolean);
+
+  const imageSource = rawImages[activeImgIndex] || null;
+
+  const handleImageError = () => {
+    if (activeImgIndex < rawImages.length - 1) {
+      setActiveImgIndex((prev) => prev + 1);
+    } else {
+      setAllImagesFailed(true);
+    }
+  };
 
   const handleAddToCart = (e) => {
     e.preventDefault();
@@ -51,14 +62,14 @@ export default function ProductCard({ product, index = 0 }) {
           {/* Image & Overlay Area */}
           <div className="relative aspect-4/3 overflow-hidden bg-neutral-100 select-none">
             {/* Real Image vs Missing Image Placeholder */}
-            {!imgError && imageSource ? (
+            {!allImagesFailed && imageSource ? (
               <img
                 src={imageSource}
                 alt={product.title}
                 className={`w-full h-full object-cover transition-transform duration-500 ${
                   isOutOfStock ? 'opacity-90 grayscale-20' : 'group-hover:scale-105'
                 }`}
-                onError={() => setImgError(true)}
+                onError={handleImageError}
                 loading="lazy"
               />
             ) : (

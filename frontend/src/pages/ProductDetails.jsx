@@ -43,9 +43,9 @@ export default function ProductDetails() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [currentImage, setCurrentImage] = useState(0);
+  const [failedImageUrls, setFailedImageUrls] = useState(new Set());
   const [isFavorite, setIsFavorite] = useState(false);
   const [quantity, setQuantity] = useState(1);
-  const [imgError, setImgError] = useState(false);
 
   const loadProduct = useCallback(async () => {
     setIsLoading(true);
@@ -110,12 +110,33 @@ export default function ProductDetails() {
   }
 
   const rawImages = activeProduct.images || (reduxProduct?.images) || [];
-  const images = rawImages.map((img) => (typeof img === 'string' ? img : img?.storage_path)).filter(Boolean);
-  if (images.length === 0 && activeProduct.storage_path) {
-    images.push(activeProduct.storage_path);
+  const displayImages = rawImages
+    .map((img) => (typeof img === 'string' ? img : img?.storage_path))
+    .filter(Boolean);
+
+  if (displayImages.length === 0 && activeProduct.storage_path) {
+    displayImages.push(activeProduct.storage_path);
   }
 
-  const displayImages = images.length > 0 ? images : [''];
+  const handleImageError = (failedUrl) => {
+    setFailedImageUrls((prev) => {
+      const updated = new Set(prev);
+      updated.add(failedUrl);
+      return updated;
+    });
+
+    // Automatically switch to the first remaining valid image
+    const nextValidIndex = displayImages.findIndex(
+      (url) => url && url !== failedUrl && !failedImageUrls.has(url)
+    );
+    if (nextValidIndex !== -1 && (displayImages[currentImage] === failedUrl || failedImageUrls.has(displayImages[currentImage]))) {
+      setCurrentImage(nextValidIndex);
+    }
+  };
+
+  const currentImageUrl = displayImages[currentImage];
+  const isCurrentFailed = !currentImageUrl || failedImageUrls.has(currentImageUrl);
+  const allImagesFailed = displayImages.length === 0 || displayImages.every((url) => failedImageUrls.has(url));
 
   const handleAddToCart = () => {
     if (isOutOfStock) return;
@@ -172,8 +193,15 @@ export default function ProductDetails() {
     });
   };
 
-  const nextImage = () => setCurrentImage((prev) => (prev + 1) % displayImages.length);
-  const prevImage = () => setCurrentImage((prev) => (prev - 1 + displayImages.length) % displayImages.length);
+  const nextImage = () => {
+    if (displayImages.length <= 1) return;
+    setCurrentImage((prev) => (prev + 1) % displayImages.length);
+  };
+
+  const prevImage = () => {
+    if (displayImages.length <= 1) return;
+    setCurrentImage((prev) => (prev - 1 + displayImages.length) % displayImages.length);
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-10">
@@ -207,18 +235,19 @@ export default function ProductDetails() {
 
       {/* Main Product Details Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
-        {/* Left: Product Images & Out of Stock Overlay */}
+        {/* Left: Product Images Gallery & Out of Stock Overlay */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           className="space-y-4"
         >
           <div className="relative aspect-4/3 rounded-3xl overflow-hidden bg-neutral-100 border border-neutral-100 shadow-xs select-none">
-            {displayImages[currentImage] && !imgError ? (
+            {/* Real Valid Image vs Missing Image State */}
+            {!allImagesFailed && currentImageUrl && !isCurrentFailed ? (
               <img
-                src={displayImages[currentImage]}
+                src={currentImageUrl}
                 alt={activeProduct.title}
-                onError={() => setImgError(true)}
+                onError={() => handleImageError(currentImageUrl)}
                 className={`w-full h-full object-cover transition-transform duration-500 ${
                   isOutOfStock ? 'opacity-90 grayscale-15' : ''
                 }`}
@@ -247,7 +276,7 @@ export default function ProductDetails() {
               {isFavorite ? <HiHeart className="w-5 h-5 text-red-500" /> : <HiOutlineHeart className="w-5 h-5" />}
             </button>
 
-            {displayImages.length > 1 && (
+            {displayImages.length > 1 && !allImagesFailed && (
               <>
                 <button
                   onClick={prevImage}
@@ -271,19 +300,36 @@ export default function ProductDetails() {
             )}
           </div>
 
+          {/* Thumbnails Row */}
           {displayImages.length > 1 && (
             <div className="flex gap-3 overflow-x-auto pb-2">
-              {displayImages.map((img, i) => (
-                <button
-                  key={i}
-                  onClick={() => setCurrentImage(i)}
-                  className={`relative w-20 h-20 rounded-2xl overflow-hidden shrink-0 border-2 transition-all ${
-                    currentImage === i ? 'border-primary-500 ring-2 ring-primary-500/20' : 'border-transparent opacity-70 hover:opacity-100'
-                  }`}
-                >
-                  <img src={img} alt="" className="w-full h-full object-cover" />
-                </button>
-              ))}
+              {displayImages.map((img, i) => {
+                const isFailed = failedImageUrls.has(img);
+                return (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentImage(i)}
+                    className={`relative w-20 h-20 rounded-2xl overflow-hidden shrink-0 border-2 transition-all ${
+                      currentImage === i
+                        ? 'border-primary-500 ring-2 ring-primary-500/20'
+                        : 'border-transparent opacity-70 hover:opacity-100'
+                    }`}
+                  >
+                    {!isFailed ? (
+                      <img
+                        src={img}
+                        alt=""
+                        onError={() => handleImageError(img)}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-neutral-100 flex items-center justify-center text-xs text-neutral-400">
+                        🖼️
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
         </motion.div>
@@ -354,9 +400,9 @@ export default function ProductDetails() {
               <span className="text-3xl font-extrabold text-primary-600">
                 {formatPrice(activeProduct.price)}
               </span>
-              {activeProduct.unit && (
-                <span className="text-sm text-neutral-500">/ {activeProduct.unit}</span>
-              )}
+              <span className="text-sm text-neutral-500">
+                / {activeProduct.unit || 'unit'}
+              </span>
             </div>
           </div>
 
