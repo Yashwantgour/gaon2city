@@ -42,7 +42,7 @@ export default function ProductDetails() {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   const [isLoading, setIsLoading] = useState(true);
-  const [currentImage, setCurrentImage] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [failedImageUrls, setFailedImageUrls] = useState(new Set());
   const [isFavorite, setIsFavorite] = useState(false);
   const [quantity, setQuantity] = useState(1);
@@ -110,12 +110,12 @@ export default function ProductDetails() {
   }
 
   const rawImages = activeProduct.images || (reduxProduct?.images) || [];
-  const displayImages = rawImages
+  const candidateImageUrls = rawImages
     .map((img) => (typeof img === 'string' ? img : img?.storage_path))
     .filter(Boolean);
 
-  if (displayImages.length === 0 && activeProduct.storage_path) {
-    displayImages.push(activeProduct.storage_path);
+  if (candidateImageUrls.length === 0 && activeProduct.storage_path) {
+    candidateImageUrls.push(activeProduct.storage_path);
   }
 
   const handleImageError = (failedUrl) => {
@@ -124,19 +124,17 @@ export default function ProductDetails() {
       updated.add(failedUrl);
       return updated;
     });
-
-    // Automatically switch to the first remaining valid image
-    const nextValidIndex = displayImages.findIndex(
-      (url) => url && url !== failedUrl && !failedImageUrls.has(url)
-    );
-    if (nextValidIndex !== -1 && (displayImages[currentImage] === failedUrl || failedImageUrls.has(displayImages[currentImage]))) {
-      setCurrentImage(nextValidIndex);
-    }
   };
 
-  const currentImageUrl = displayImages[currentImage];
-  const isCurrentFailed = !currentImageUrl || failedImageUrls.has(currentImageUrl);
-  const allImagesFailed = displayImages.length === 0 || displayImages.every((url) => failedImageUrls.has(url));
+  // Filter out any image that returned 404 or failed to load
+  const visibleImages = candidateImageUrls.filter((url) => !failedImageUrls.has(url));
+
+  // Keep currentIndex clamped to available visible images
+  const safeCurrentIndex = visibleImages.length > 0
+    ? Math.min(currentIndex, visibleImages.length - 1)
+    : 0;
+
+  const currentMainImageUrl = visibleImages[safeCurrentIndex] || null;
 
   const handleAddToCart = () => {
     if (isOutOfStock) return;
@@ -194,17 +192,29 @@ export default function ProductDetails() {
   };
 
   const nextImage = () => {
-    if (displayImages.length <= 1) return;
-    setCurrentImage((prev) => (prev + 1) % displayImages.length);
+    if (visibleImages.length <= 1) return;
+    setCurrentIndex((prev) => (prev + 1) % visibleImages.length);
   };
 
   const prevImage = () => {
-    if (displayImages.length <= 1) return;
-    setCurrentImage((prev) => (prev - 1 + displayImages.length) % displayImages.length);
+    if (visibleImages.length <= 1) return;
+    setCurrentIndex((prev) => (prev - 1 + visibleImages.length) % visibleImages.length);
   };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-10">
+      {/* Hidden prefetcher to eagerly detect broken images and remove them */}
+      <div className="hidden" aria-hidden="true">
+        {candidateImageUrls.map((url, i) => (
+          <img
+            key={`prefetch-${i}`}
+            src={url}
+            alt=""
+            onError={() => handleImageError(url)}
+          />
+        ))}
+      </div>
+
       {/* Breadcrumb */}
       <motion.div
         initial={{ opacity: 0 }}
@@ -243,11 +253,11 @@ export default function ProductDetails() {
         >
           <div className="relative aspect-4/3 rounded-3xl overflow-hidden bg-neutral-100 border border-neutral-100 shadow-xs select-none">
             {/* Real Valid Image vs Missing Image State */}
-            {!allImagesFailed && currentImageUrl && !isCurrentFailed ? (
+            {currentMainImageUrl ? (
               <img
-                src={currentImageUrl}
+                src={currentMainImageUrl}
                 alt={activeProduct.title}
-                onError={() => handleImageError(currentImageUrl)}
+                onError={() => handleImageError(currentMainImageUrl)}
                 className={`w-full h-full object-cover transition-transform duration-500 ${
                   isOutOfStock ? 'opacity-90 grayscale-15' : ''
                 }`}
@@ -276,7 +286,7 @@ export default function ProductDetails() {
               {isFavorite ? <HiHeart className="w-5 h-5 text-red-500" /> : <HiOutlineHeart className="w-5 h-5" />}
             </button>
 
-            {displayImages.length > 1 && !allImagesFailed && (
+            {visibleImages.length > 1 && (
               <>
                 <button
                   onClick={prevImage}
@@ -300,36 +310,27 @@ export default function ProductDetails() {
             )}
           </div>
 
-          {/* Thumbnails Row */}
-          {displayImages.length > 1 && (
+          {/* Valid Thumbnails Row (ONLY displayed when multiple valid images exist) */}
+          {visibleImages.length > 1 && (
             <div className="flex gap-3 overflow-x-auto pb-2">
-              {displayImages.map((img, i) => {
-                const isFailed = failedImageUrls.has(img);
-                return (
-                  <button
-                    key={i}
-                    onClick={() => setCurrentImage(i)}
-                    className={`relative w-20 h-20 rounded-2xl overflow-hidden shrink-0 border-2 transition-all ${
-                      currentImage === i
-                        ? 'border-primary-500 ring-2 ring-primary-500/20'
-                        : 'border-transparent opacity-70 hover:opacity-100'
-                    }`}
-                  >
-                    {!isFailed ? (
-                      <img
-                        src={img}
-                        alt=""
-                        onError={() => handleImageError(img)}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-neutral-100 flex items-center justify-center text-xs text-neutral-400">
-                        🖼️
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
+              {visibleImages.map((img, i) => (
+                <button
+                  key={`thumb-${i}`}
+                  onClick={() => setCurrentIndex(i)}
+                  className={`relative w-20 h-20 rounded-2xl overflow-hidden shrink-0 border-2 transition-all ${
+                    safeCurrentIndex === i
+                      ? 'border-primary-500 ring-2 ring-primary-500/20'
+                      : 'border-transparent opacity-70 hover:opacity-100'
+                  }`}
+                >
+                  <img
+                    src={img}
+                    alt=""
+                    onError={() => handleImageError(img)}
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+              ))}
             </div>
           )}
         </motion.div>
