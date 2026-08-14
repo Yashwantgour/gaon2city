@@ -45,8 +45,11 @@ export default function EditProduct() {
   const [product, setProduct] = useState(null);
   const [unauthorized, setUnauthorized] = useState(false);
 
-  // Existing images: array of string URLs/paths
+  // Existing images loaded from backend
   const [existingImages, setExistingImages] = useState([]);
+  // Track failed 404 image URLs
+  const [failedExistingUrls, setFailedExistingUrls] = useState(new Set());
+
   // New image files selected by the user: array of File objects
   const [newImageFiles, setNewImageFiles] = useState([]);
   // Temporary previews for new images: array of object URLs
@@ -61,6 +64,18 @@ export default function EditProduct() {
   } = useForm();
 
   const currentQuantity = watch('quantity');
+
+  const handleExistingImgError = (failedUrl) => {
+    setFailedExistingUrls((prev) => {
+      const updated = new Set(prev);
+      updated.add(failedUrl);
+      return updated;
+    });
+  };
+
+  // Filter out any existing image whose Supabase Storage object is 404
+  const validExistingImages = existingImages.filter((url) => !failedExistingUrls.has(url));
+  const totalUsableCount = validExistingImages.length + newImageFiles.length;
 
   const loadProduct = useCallback(async () => {
     setIsLoading(true);
@@ -115,8 +130,7 @@ export default function EditProduct() {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
 
-    const totalCount = existingImages.length + newImageFiles.length + files.length;
-    if (totalCount > 5) {
+    if (totalUsableCount + files.length > 5) {
       dispatch(showToast({ type: 'error', message: 'You can upload a maximum of 5 images' }));
       return;
     }
@@ -127,11 +141,11 @@ export default function EditProduct() {
   };
 
   const removeExistingImage = (index) => {
-    setExistingImages((prev) => prev.filter((_, i) => i !== index));
+    const targetUrl = validExistingImages[index];
+    setExistingImages((prev) => prev.filter((url) => url !== targetUrl));
   };
 
   const removeNewImage = (index) => {
-    // Revoke temporary object URL
     URL.revokeObjectURL(newImagePreviews[index]);
     setNewImageFiles((prev) => prev.filter((_, i) => i !== index));
     setNewImagePreviews((prev) => [...prev, ...newPreviews]);
@@ -149,8 +163,8 @@ export default function EditProduct() {
         }
       }
 
-      // Combine existing images with newly uploaded images
-      const finalImagesList = [...existingImages, ...uploadedUrls];
+      // Combine valid existing images with newly uploaded images
+      const finalImagesList = [...validExistingImages, ...uploadedUrls];
 
       // 2. Update Product API with Category UUID
       const updated = await updateProduct(id, {
@@ -217,6 +231,18 @@ export default function EditProduct() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6">
+      {/* Hidden prefetcher to eagerly detect broken existing images */}
+      <div className="hidden" aria-hidden="true">
+        {existingImages.map((url, i) => (
+          <img
+            key={`preload-${i}`}
+            src={url}
+            alt=""
+            onError={() => handleExistingImgError(url)}
+          />
+        ))}
+      </div>
+
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         {/* Header */}
         <div className="flex items-center justify-between gap-3 mb-6">
@@ -253,19 +279,24 @@ export default function EditProduct() {
           <div className="bg-white rounded-2xl border border-neutral-100 p-5 shadow-xs">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-neutral-800">Product Images</h3>
-              <span className="text-xs text-neutral-400">
-                {existingImages.length + newImageFiles.length} / 5 images
+              <span className="text-xs text-neutral-500 font-medium">
+                {totalUsableCount} / 5 images
               </span>
             </div>
 
             <div className="flex flex-wrap gap-3">
-              {/* Existing Images */}
-              {existingImages.map((imgUrl, i) => (
+              {/* Valid Existing Images */}
+              {validExistingImages.map((imgUrl, i) => (
                 <div
                   key={`existing-${i}`}
                   className="relative w-24 h-24 rounded-xl overflow-hidden border border-neutral-200 bg-neutral-50 group"
                 >
-                  <img src={imgUrl} alt="" className="w-full h-full object-cover" />
+                  <img
+                    src={imgUrl}
+                    alt=""
+                    onError={() => handleExistingImgError(imgUrl)}
+                    className="w-full h-full object-cover"
+                  />
                   <button
                     type="button"
                     onClick={() => removeExistingImage(i)}
@@ -302,7 +333,7 @@ export default function EditProduct() {
               ))}
 
               {/* Add New Image Button */}
-              {existingImages.length + newImageFiles.length < 5 && (
+              {totalUsableCount < 5 && (
                 <label className="w-24 h-24 rounded-xl border-2 border-dashed border-neutral-200 hover:border-primary-400 hover:bg-primary-50/50 flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors">
                   <HiOutlinePhoto className="w-6 h-6 text-neutral-400" />
                   <span className="text-xs text-neutral-500 font-medium">Add Image</span>
