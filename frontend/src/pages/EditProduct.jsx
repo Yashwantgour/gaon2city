@@ -16,23 +16,7 @@ import { uploadFile } from '../services/storageService';
 import { updateProduct as updateProductInStore } from '../features/products/productsSlice';
 import { showToast } from '../features/ui/uiSlice';
 
-export const CATEGORIES = [
-  { id: '9afc48ef-9336-42d1-b607-9a01b82129b4', name: 'Grains & Pulses', slug: 'grains-pulses' },
-  { id: 'a1fa8152-135c-4958-9bad-2bf1e3e17358', name: 'Vegetables', slug: 'vegetables' },
-  { id: 'fb4ee733-d658-4410-b0e6-e145d390e97f', name: 'Fruits', slug: 'fruits' },
-  { id: '38033e62-fe14-4478-ad44-332cb23b0401', name: 'Dairy & Eggs', slug: 'dairy-eggs' },
-  { id: 'de2785fb-4ca6-4c77-b91c-62f96250a700', name: 'Spices & Herbs', slug: 'spices-herbs' },
-  { id: '809ad623-b3b6-4ab3-a339-8d78e8f2f8a5', name: 'Honey & Preserves', slug: 'honey-preserves' },
-  { id: '6fc237b9-c094-49f7-9682-3946bec1137f', name: 'Organic Fertilizers', slug: 'organic-fertilizers' },
-  { id: '104e2e65-0c4b-4f34-8082-3d5443fbb65c', name: 'Seeds & Plants', slug: 'seeds-plants' },
-];
-
-const CONDITIONS = [
-  { value: 'new', label: 'Fresh / New' },
-  { value: 'used-like-new', label: 'Surplus - Grade A' },
-  { value: 'used-good', label: 'Standard - Grade B' },
-  { value: 'used-fair', label: 'Processed / Dried' },
-];
+import { CATEGORIES, CONDITIONS } from '../utils/constants';
 
 export default function EditProduct() {
   const { id } = useParams();

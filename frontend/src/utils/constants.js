@@ -1,12 +1,16 @@
 export const CATEGORIES = [
-  { id: '9afc48ef-9336-42d1-b607-9a01b82129b4', name: 'Grains & Pulses', slug: 'grains-pulses', icon: '🌾', color: 'bg-amber-50 text-amber-700' },
-  { id: 'a1fa8152-135c-4958-9bad-2bf1e3e17358', name: 'Vegetables', slug: 'vegetables', icon: '🥬', color: 'bg-green-50 text-green-700' },
-  { id: 'fb4ee733-d658-4410-b0e6-e145d390e97f', name: 'Fruits', slug: 'fruits', icon: '🍎', color: 'bg-red-50 text-red-700' },
-  { id: '38033e62-fe14-4478-ad44-332cb23b0401', name: 'Dairy & Eggs', slug: 'dairy-eggs', icon: '🥛', color: 'bg-blue-50 text-blue-700' },
-  { id: 'de2785fb-4ca6-4c77-b91c-62f96250a700', name: 'Spices & Herbs', slug: 'spices-herbs', icon: '🌿', color: 'bg-emerald-50 text-emerald-700' },
-  { id: '809ad623-b3b6-4ab3-a339-8d78e8f2f8a5', name: 'Honey & Preserves', slug: 'honey-preserves', icon: '🍯', color: 'bg-yellow-50 text-yellow-700' },
-  { id: '6fc237b9-c094-49f7-9682-3946bec1137f', name: 'Organic Fertilizers', slug: 'organic-fertilizers', icon: '🌱', color: 'bg-teal-50 text-teal-700' },
-  { id: '104e2e65-0c4b-4f34-8082-3d5443fbb65c', name: 'Seeds & Plants', slug: 'seeds-plants', icon: '🌻', color: 'bg-purple-50 text-purple-700' },
+  { id: '11111111-1111-4111-a111-111111111111', name: 'Agriculture', slug: 'agriculture', icon: '🌾', color: 'bg-green-50 text-green-700' },
+  { id: '22222222-2222-4222-a222-222222222222', name: 'Dairy & Milk', slug: 'dairy-milk', icon: '🥛', color: 'bg-blue-50 text-blue-700' },
+  { id: '33333333-3333-4333-a333-333333333333', name: 'Fruits & Vegetables', slug: 'fruits-vegetables', icon: '🥬', color: 'bg-emerald-50 text-emerald-700' },
+  { id: '44444444-4444-4444-a444-444444444444', name: 'Handicrafts', slug: 'handicrafts', icon: '🏺', color: 'bg-amber-50 text-amber-700' },
+  { id: '55555555-5555-4555-a555-555555555555', name: 'Clothing', slug: 'clothing', icon: '👕', color: 'bg-purple-50 text-purple-700' },
+  { id: '66666666-6666-4666-a666-666666666666', name: 'Electronics', slug: 'electronics', icon: '📱', color: 'bg-sky-50 text-sky-700' },
+  { id: '77777777-7777-4777-a777-777777777777', name: 'Home & Kitchen', slug: 'home-kitchen', icon: '🏠', color: 'bg-orange-50 text-orange-700' },
+  { id: '88888888-8888-4888-a888-888888888888', name: 'Vehicles', slug: 'vehicles', icon: '🚜', color: 'bg-slate-50 text-slate-700' },
+  { id: '99999999-9999-4999-a999-999999999999', name: 'Tools & Equipment', slug: 'tools-equipment', icon: '🔧', color: 'bg-zinc-50 text-zinc-700' },
+  { id: 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa', name: 'Services', slug: 'services', icon: '🛠️', color: 'bg-teal-50 text-teal-700' },
+  { id: 'bbbbbbbb-bbbb-4bbb-abbb-bbbbbbbbbbbb', name: 'Food & Snacks', slug: 'food-snacks', icon: '🍛', color: 'bg-red-50 text-red-700' },
+  { id: 'cccccccc-cccc-4ccc-accc-cccccccccccc', name: 'Health & Beauty', slug: 'health-beauty', icon: '💊', color: 'bg-pink-50 text-pink-700' },
 ];
 
 export const CONDITIONS = [
