@@ -202,76 +202,45 @@ export default function Home() {
         </motion.div>
       </section>
 
-      {/* ===== NEARBY PRODUCTS ===== */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-        <motion.div {...fadeInUp}>
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-xl sm:text-2xl font-bold text-neutral-800">
-                Nearby Products
-              </h2>
-              <p className="text-sm text-neutral-500 mt-0.5">
-                {hasLocation
-                  ? `Within ${radius || 10} km of ${locationName || 'your location'}`
-                  : 'Discover authentic goods listed near your village or city'}
-              </p>
-            </div>
-            {hasLocation && (
+      {/* ===== NEARBY PRODUCTS (Shown when nearby items exist) ===== */}
+      {nearbyProducts.length > 0 && (
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+          <motion.div {...fadeInUp}>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-bold text-neutral-800">
+                  Nearby Products
+                </h2>
+                <p className="text-sm text-neutral-500 mt-0.5">
+                  {hasLocation
+                    ? `Within ${radius || 10} km of ${locationName || 'your location'}`
+                    : 'Discover authentic goods listed near your village or city'}
+                </p>
+              </div>
               <Link
                 to="/marketplace?sort=nearest"
                 className="text-sm font-medium text-primary-600 hover:text-primary-700 flex items-center gap-1"
               >
                 See all <HiOutlineArrowRight className="w-4 h-4" />
               </Link>
-            )}
-          </div>
-        </motion.div>
-
-        {isLoadingNearby ? (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((n) => (
-              <div key={n} className="h-64 rounded-2xl skeleton" />
-            ))}
-          </div>
-        ) : !hasLocation ? (
-          <div className="bg-white rounded-2xl border border-neutral-100 p-8 text-center max-w-lg mx-auto shadow-xs">
-            <div className="w-12 h-12 rounded-full bg-primary-50 text-primary-600 flex items-center justify-center mx-auto mb-3">
-              <HiOutlineMapPin className="w-6 h-6" />
             </div>
-            <h3 className="font-semibold text-neutral-800 mb-1">Set Your Location</h3>
-            <p className="text-neutral-500 text-sm mb-4">
-              Enable GPS or choose your area to find products directly available in your vicinity.
-            </p>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={requestLocation}
-              isLoading={isLocating}
-              icon={<HiOutlineMapPin className="w-4 h-4" />}
-            >
-              Use Current Location
-            </Button>
-          </div>
-        ) : nearbyProducts.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-neutral-100 p-8 text-center max-w-lg mx-auto shadow-xs">
-            <p className="text-neutral-700 font-medium text-sm mb-1">No nearby products found within {radius || 10} km</p>
-            <p className="text-neutral-400 text-xs mb-4">Try expanding your search radius or explore all products.</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate('/marketplace')}
-            >
-              Browse All Marketplace Products
-            </Button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-            {nearbyProducts.slice(0, 4).map((product, index) => (
-              <ProductCard key={product.id} product={product} index={index} />
-            ))}
-          </div>
-        )}
-      </section>
+          </motion.div>
+
+          {isLoadingNearby ? (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {[1, 2, 3, 4].map((n) => (
+                <div key={n} className="h-64 rounded-2xl skeleton" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+              {nearbyProducts.slice(0, 4).map((product, index) => (
+                <ProductCard key={product.id} product={product} index={index} />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* ===== RECENTLY ADDED ===== */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 py-8">

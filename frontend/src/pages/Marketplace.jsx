@@ -239,34 +239,6 @@ export default function Marketplace() {
         </button>
       </div>
 
-      {/* Location Origin Banner */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-white border border-neutral-100 shadow-2xs mb-4">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center shrink-0">
-            <HiOutlineMapPin className="w-4 h-4" />
-          </div>
-          <div className="text-xs text-neutral-600">
-            {latitude != null && longitude != null ? (
-              <span>
-                Showing products within <strong className="text-primary-700">{radius || 10} km</strong> of{' '}
-                <strong className="text-neutral-900">{locationName || 'your area'}</strong>
-              </span>
-            ) : (
-              <span>
-                Set your delivery location to filter produce near your village or city
-              </span>
-            )}
-          </div>
-        </div>
-
-        <button
-          onClick={openDrawer}
-          className="px-3 py-1 text-xs font-bold text-primary-700 hover:text-primary-800 bg-primary-50 hover:bg-primary-100 rounded-xl transition-colors cursor-pointer"
-        >
-          {latitude != null ? 'Change Location' : 'Set Location'}
-        </button>
-      </div>
-
       {/* Radius Quick Selector */}
       <div className="flex flex-wrap items-center gap-2 mb-6">
         <span className="text-xs font-medium text-neutral-500 flex items-center gap-1">
