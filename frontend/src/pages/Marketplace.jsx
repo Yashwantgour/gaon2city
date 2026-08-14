@@ -1,11 +1,13 @@
 import { motion } from 'framer-motion';
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   HiOutlineAdjustmentsHorizontal,
   HiOutlineMagnifyingGlass,
   HiChevronDown,
+  HiChevronLeft,
+  HiChevronRight,
   HiOutlineMapPin,
   HiOutlineSquares2X2,
   HiOutlineMap,
@@ -32,6 +34,11 @@ export default function Marketplace() {
   const isLoading = useSelector((state) => state.products.isLoading);
   const { radius, changeRadius, latitude, longitude } = useLocation();
 
+  // Scroll ref & scroll indicators for Category Chip Bar
+  const categoryScrollRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
   // Read URL parameters
   const urlCategory = searchParams.get('category') || null;
   const urlSearch = searchParams.get('search') || '';
@@ -50,7 +57,34 @@ export default function Marketplace() {
 
   const debouncedSearch = useDebounce(searchInput, 400);
 
-  // Sync state when URL search params change (e.g. from navbar/home or direct link)
+  // Check scroll state for left/right gradient & arrow indicators
+  const checkScrollState = useCallback(() => {
+    const el = categoryScrollRef.current;
+    if (el) {
+      const hasOverflow = el.scrollWidth > el.clientWidth;
+      setCanScrollLeft(el.scrollLeft > 4);
+      setCanScrollRight(hasOverflow && el.scrollLeft < el.scrollWidth - el.clientWidth - 4);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkScrollState();
+    window.addEventListener('resize', checkScrollState);
+    return () => window.removeEventListener('resize', checkScrollState);
+  }, [checkScrollState]);
+
+  const scrollCategoryTrack = (direction) => {
+    const el = categoryScrollRef.current;
+    if (el) {
+      const scrollAmount = 260;
+      el.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth',
+      });
+    }
+  };
+
+  // Sync state when URL search params change
   useEffect(() => {
     const nextCat = searchParams.get('category');
     if (nextCat === 'all') {
@@ -214,7 +248,7 @@ export default function Marketplace() {
   ].filter(Boolean).length;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
       {/* Header & View Mode Switcher */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
@@ -271,7 +305,7 @@ export default function Marketplace() {
           {searchInput && (
             <button
               onClick={() => setSearchInput('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 cursor-pointer"
             >
               <HiOutlineXMark className="w-4 h-4" />
             </button>
@@ -327,32 +361,65 @@ export default function Marketplace() {
         </button>
       </div>
 
-      {/* Category Quick Chips */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-        <button
-          onClick={() => handleCategorySelect(null)}
-          className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-            !selectedCategory
-              ? 'bg-primary-600 text-white shadow-xs'
-              : 'bg-white text-neutral-600 border border-neutral-200 hover:border-neutral-300'
-          }`}
+      {/* Production-Grade Category Chip Bar with Gradient Fades and Smooth Navigation */}
+      <div className="relative w-full max-w-full group">
+        {/* Left subtle gradient fade and scroll button */}
+        {canScrollLeft && (
+          <div className="absolute left-0 top-0 bottom-0 z-10 flex items-center pr-4 pl-0.5 bg-gradient-to-r from-neutral-50/95 via-neutral-50/70 to-transparent pointer-events-none">
+            <button
+              onClick={() => scrollCategoryTrack('left')}
+              className="pointer-events-auto p-1.5 rounded-full bg-white text-neutral-700 shadow-md border border-neutral-200 hover:bg-neutral-50 hover:text-neutral-900 transition-all cursor-pointer hidden sm:flex items-center justify-center"
+              aria-label="Scroll categories left"
+            >
+              <HiChevronLeft className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Horizontal scroll container (No page-level horizontal overflow) */}
+        <div
+          ref={categoryScrollRef}
+          onScroll={checkScrollState}
+          className="flex items-center gap-2 overflow-x-auto overflow-y-hidden py-1 px-0.5 scroll-smooth overscroll-x-contain scrollbar-none w-full"
         >
-          All
-        </button>
-        {CATEGORIES.map((cat) => (
           <button
-            key={cat.id}
-            onClick={() => handleCategorySelect(cat.slug)}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
-              selectedCategory === cat.slug
-                ? 'bg-primary-600 text-white font-bold shadow-xs'
-                : 'bg-white text-neutral-600 border border-neutral-200 hover:border-neutral-300'
+            onClick={() => handleCategorySelect(null)}
+            className={`shrink-0 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all select-none cursor-pointer ${
+              !selectedCategory
+                ? 'bg-primary-600 text-white shadow-xs'
+                : 'bg-white text-neutral-600 border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50/60'
             }`}
           >
-            <span>{cat.icon}</span>
-            <span>{cat.name}</span>
+            All
           </button>
-        ))}
+          {CATEGORIES.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => handleCategorySelect(cat.slug)}
+              className={`shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all select-none cursor-pointer ${
+                selectedCategory === cat.slug
+                  ? 'bg-primary-600 text-white font-bold shadow-xs'
+                  : 'bg-white text-neutral-600 border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50/60'
+              }`}
+            >
+              <span className="text-sm leading-none">{cat.icon}</span>
+              <span>{cat.name}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Right subtle gradient fade and scroll button */}
+        {canScrollRight && (
+          <div className="absolute right-0 top-0 bottom-0 z-10 flex items-center pl-4 pr-0.5 bg-gradient-to-l from-neutral-50/95 via-neutral-50/70 to-transparent pointer-events-none">
+            <button
+              onClick={() => scrollCategoryTrack('right')}
+              className="pointer-events-auto p-1.5 rounded-full bg-white text-neutral-700 shadow-md border border-neutral-200 hover:bg-neutral-50 hover:text-neutral-900 transition-all cursor-pointer hidden sm:flex items-center justify-center"
+              aria-label="Scroll categories right"
+            >
+              <HiChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Radius Quick Selector */}
