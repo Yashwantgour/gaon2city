@@ -1,10 +1,14 @@
 import axios from 'axios';
 import { supabase } from './supabase';
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_URL ||
-  'https://gaon2city.onrender.com/api';
+// Production Safeguard:
+// In production builds (on Vercel), never allow localhost:5000 fallback under any circumstances.
+const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL;
+const isProd = import.meta.env.PROD;
+
+const API_BASE_URL = isProd
+  ? (envUrl && !envUrl.includes('localhost') ? envUrl : 'https://gaon2city.onrender.com/api')
+  : (envUrl || 'http://localhost:5000/api');
 
 const api = axios.create({
   baseURL: API_BASE_URL,
