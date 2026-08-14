@@ -6,6 +6,7 @@ import Layout from './components/layout/Layout';
 import Home from './pages/Home';
 import Marketplace from './pages/Marketplace';
 import ProductDetails from './pages/ProductDetails';
+import SellerProfile from './pages/SellerProfile';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Cart from './pages/Cart';
@@ -73,6 +74,7 @@ function AppRoutes() {
           <Route path="/" element={<Home />} />
           <Route path="/marketplace" element={<Marketplace />} />
           <Route path="/product/:id" element={<ProductDetails />} />
+          <Route path="/seller/:id" element={<SellerProfile />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/cart" element={<Cart />} />

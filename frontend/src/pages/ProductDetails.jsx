@@ -502,7 +502,10 @@ export default function ProductDetails() {
 
           {/* Seller Trust Card */}
           {activeProduct.seller && (
-            <div className="bg-neutral-50 rounded-2xl p-4 border border-neutral-100 space-y-3">
+            <Link
+              to={`/seller/${sellerId}`}
+              className="block bg-neutral-50 hover:bg-neutral-100/80 rounded-2xl p-4 border border-neutral-100 transition-colors group"
+            >
               <div className="flex items-center gap-3">
                 {activeProduct.seller.avatar_url ? (
                   <img
@@ -519,7 +522,9 @@ export default function ProductDetails() {
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <h4 className="font-semibold text-neutral-800 truncate">{activeProduct.seller.name}</h4>
+                    <h4 className="font-semibold text-neutral-800 group-hover:text-primary-600 transition-colors truncate">
+                      {activeProduct.seller.name}
+                    </h4>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60 flex items-center gap-0.5">
                       <HiOutlineShieldCheck className="w-3 h-3" />
                       Verified
@@ -535,8 +540,11 @@ export default function ProductDetails() {
                     )}
                   </div>
                 </div>
+                <span className="text-xs font-semibold text-primary-600 group-hover:translate-x-0.5 transition-transform shrink-0">
+                  View Profile ›
+                </span>
               </div>
-            </div>
+            </Link>
           )}
         </motion.div>
       </div>

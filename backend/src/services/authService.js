@@ -53,6 +53,23 @@ export async function getMe(userId) {
 }
 
 /**
+ * Get public seller profile by ID.
+ */
+export async function getSellerProfile(sellerId) {
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id, name, avatar_url, village, city, district, state, seller_type, verification_status, created_at')
+    .eq('id', sellerId)
+    .single();
+
+  if (error || !data) {
+    throw ApiError.notFound('Seller profile not found');
+  }
+
+  return data;
+}
+
+/**
  * Update user's profile using upsert so missing profile rows are created automatically.
  */
 export async function updateProfile(userId, updates) {
