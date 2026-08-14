@@ -49,10 +49,24 @@ export const updateProductValidators = [
   body('quantity')
     .optional()
     .isInt({ min: 0 }).withMessage('Quantity must be 0 or more'),
+  body('unit')
+    .optional()
+    .trim(),
   body('condition')
     .optional()
     .isIn(['new', 'used-like-new', 'used-good', 'used-fair', 'used', 'refurbished'])
     .withMessage('Invalid condition value'),
+  body('category')
+    .optional(),
+  body('category_id')
+    .optional(),
+  body('pickup_available')
+    .optional(),
+  body('delivery_available')
+    .optional(),
+  body('images')
+    .optional()
+    .isArray().withMessage('Images must be an array'),
 ];
 
 export const nearbyProductValidators = [

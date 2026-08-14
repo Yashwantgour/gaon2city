@@ -417,18 +417,96 @@ export async function updateProduct(productId, sellerId, updates, accessToken) {
     throw ApiError.forbidden('You can only update your own products');
   }
 
-  const { data, error } = await client
-    .from('products')
-    .update(updates)
-    .eq('id', productId)
-    .select()
-    .single();
+  const {
+    title,
+    description,
+    category_id,
+    category: rawCategory,
+    price,
+    quantity,
+    unit,
+    condition,
+    pickup_available,
+    delivery_available,
+    latitude,
+    longitude,
+    images,
+  } = updates;
 
-  if (error) {
-    throw ApiError.internal('Failed to update product: ' + error.message);
+  // Validate category_id if raw category slug provided
+  let validCategoryId = category_id;
+  if (!validCategoryId && rawCategory) {
+    const { data: catRow } = await supabaseAdmin
+      .from('categories')
+      .select('id')
+      .ilike('slug', rawCategory)
+      .single();
+    if (catRow) validCategoryId = catRow.id;
   }
 
-  return data;
+  const updatePayload = {};
+  if (title !== undefined) updatePayload.title = title;
+  if (description !== undefined) updatePayload.description = description;
+  if (validCategoryId !== undefined) updatePayload.category_id = validCategoryId || null;
+  if (price !== undefined) updatePayload.price = parseFloat(price);
+  if (quantity !== undefined) updatePayload.quantity = parseInt(quantity);
+  if (unit !== undefined) updatePayload.unit = unit;
+  if (condition !== undefined) updatePayload.condition = condition;
+  if (pickup_available !== undefined) {
+    updatePayload.pickup_available = pickup_available === true || pickup_available === 'true';
+  }
+  if (delivery_available !== undefined) {
+    updatePayload.delivery_available = delivery_available === true || delivery_available === 'true';
+  }
+  if (latitude !== undefined) updatePayload.latitude = latitude ? parseFloat(latitude) : null;
+  if (longitude !== undefined) updatePayload.longitude = longitude ? parseFloat(longitude) : null;
+
+  if (Object.keys(updatePayload).length > 0) {
+    const { error } = await client
+      .from('products')
+      .update(updatePayload)
+      .eq('id', productId);
+
+    if (error) {
+      throw ApiError.internal('Failed to update product: ' + error.message);
+    }
+  }
+
+  // Update image rows if provided
+  if (Array.isArray(images)) {
+    // Delete existing product_images for this product
+    await supabaseAdmin
+      .from('product_images')
+      .delete()
+      .eq('product_id', productId);
+
+    if (images.length > 0) {
+      const imageInserts = images.map((img, index) => {
+        const storagePath = typeof img === 'string' ? img : img.storage_path || img.url;
+
+        // Reject raw base64 data URLs
+        if (storagePath && storagePath.startsWith('data:image/')) {
+          throw ApiError.badRequest('Direct Data URLs cannot be saved as permanent product images. Please upload images via the upload endpoint first.');
+        }
+
+        return {
+          product_id: productId,
+          storage_path: storagePath,
+          display_order: index,
+        };
+      });
+
+      const { error: imgError } = await supabaseAdmin
+        .from('product_images')
+        .insert(imageInserts);
+
+      if (imgError) {
+        console.error('Failed to update product images:', imgError);
+      }
+    }
+  }
+
+  return await getProductById(productId);
 }
 
 /**

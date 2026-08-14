@@ -14,6 +14,7 @@ import Orders from './pages/Orders';
 import Profile from './pages/Profile';
 import SellerDashboard from './pages/SellerDashboard';
 import AddProduct from './pages/AddProduct';
+import EditProduct from './pages/EditProduct';
 import Chat from './pages/Chat';
 import Directions from './pages/Directions';
 import AdminDashboard from './pages/AdminDashboard';
@@ -80,6 +81,7 @@ function AppRoutes() {
           <Route path="/profile" element={<Profile />} />
           <Route path="/seller/dashboard" element={<SellerDashboard />} />
           <Route path="/sell" element={<AddProduct />} />
+          <Route path="/edit/:id" element={<EditProduct />} />
           <Route path="/chat" element={<Chat />} />
           <Route path="/directions" element={<Directions />} />
           <Route path="/admin" element={<AdminDashboard />} />
