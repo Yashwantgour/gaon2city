@@ -369,7 +369,7 @@ export default function EditProduct() {
                   <option value="">Select Category</option>
                   {CATEGORIES.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name}
+                      {c.icon} {c.name}
                     </option>
                   ))}
                 </select>

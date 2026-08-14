@@ -239,6 +239,34 @@ export default function Marketplace() {
         </button>
       </div>
 
+      {/* Category Quick Chips */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-3 scrollbar-none">
+        <button
+          onClick={() => setSelectedCategory(null)}
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+            !selectedCategory
+              ? 'bg-primary-600 text-white shadow-xs'
+              : 'bg-white text-neutral-600 border border-neutral-200 hover:border-neutral-300'
+          }`}
+        >
+          All
+        </button>
+        {CATEGORIES.map((cat) => (
+          <button
+            key={cat.id}
+            onClick={() => setSelectedCategory(selectedCategory === cat.slug ? null : cat.slug)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
+              selectedCategory === cat.slug
+                ? 'bg-primary-600 text-white font-semibold shadow-xs'
+                : 'bg-white text-neutral-600 border border-neutral-200 hover:border-neutral-300'
+            }`}
+          >
+            <span>{cat.icon}</span>
+            <span>{cat.name}</span>
+          </button>
+        ))}
+      </div>
+
       {/* Radius Quick Selector */}
       <div className="flex flex-wrap items-center gap-2 mb-6">
         <span className="text-xs font-medium text-neutral-500 flex items-center gap-1">
@@ -262,7 +290,7 @@ export default function Marketplace() {
         </div>
       </div>
 
-      {/* Filter Drawer */}
+      {/* Filter Drawer / Panel */}
       {showFilters && (
         <motion.div
           initial={{ opacity: 0, height: 0 }}
@@ -276,11 +304,13 @@ export default function Marketplace() {
               <select
                 value={selectedCategory || ''}
                 onChange={(e) => setSelectedCategory(e.target.value || null)}
-                className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white"
               >
                 <option value="">All Categories</option>
                 {CATEGORIES.map((cat) => (
-                  <option key={cat.id} value={cat.slug}>{cat.name}</option>
+                  <option key={cat.id} value={cat.slug}>
+                    {cat.icon} {cat.name}
+                  </option>
                 ))}
               </select>
             </div>

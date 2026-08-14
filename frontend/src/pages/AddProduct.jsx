@@ -74,8 +74,7 @@ export default function AddProduct() {
         price: parseFloat(data.price),
         quantity: parseInt(data.quantity),
         condition: data.condition || 'new',
-        category_id: data.category || null,
-        category: data.category || null,
+        category_id: data.category_id || null,
         pickup_available: Boolean(data.pickup_available),
         delivery_available: Boolean(data.delivery_available),
         images: uploadedImageUrls,
@@ -177,11 +176,13 @@ export default function AddProduct() {
                 </label>
                 <select
                   className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white"
-                  {...register('category', { required: 'Please select a category' })}
+                  {...register('category_id', { required: 'Please select a category' })}
                 >
                   <option value="">Select Category</option>
                   {CATEGORIES.map((c) => (
-                    <option key={c.id} value={c.slug}>{c.name}</option>
+                    <option key={c.id} value={c.id}>
+                      {c.icon} {c.name}
+                    </option>
                   ))}
                 </select>
               </div>
