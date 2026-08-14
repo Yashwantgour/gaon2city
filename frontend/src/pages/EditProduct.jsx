@@ -16,15 +16,15 @@ import { uploadFile } from '../services/storageService';
 import { updateProduct as updateProductInStore } from '../features/products/productsSlice';
 import { showToast } from '../features/ui/uiSlice';
 
-const CATEGORIES = [
-  { id: 'grains-pulses', name: 'Grains & Pulses', slug: 'grains-pulses' },
-  { id: 'vegetables', name: 'Vegetables', slug: 'vegetables' },
-  { id: 'fruits', name: 'Fruits', slug: 'fruits' },
-  { id: 'dairy-eggs', name: 'Dairy & Eggs', slug: 'dairy-eggs' },
-  { id: 'spices-herbs', name: 'Spices & Herbs', slug: 'spices-herbs' },
-  { id: 'honey-preserves', name: 'Honey & Preserves', slug: 'honey-preserves' },
-  { id: 'organic-fertilizers', name: 'Organic Fertilizers', slug: 'organic-fertilizers' },
-  { id: 'seeds-plants', name: 'Seeds & Plants', slug: 'seeds-plants' },
+export const CATEGORIES = [
+  { id: '9afc48ef-9336-42d1-b607-9a01b82129b4', name: 'Grains & Pulses', slug: 'grains-pulses' },
+  { id: 'a1fa8152-135c-4958-9bad-2bf1e3e17358', name: 'Vegetables', slug: 'vegetables' },
+  { id: 'fb4ee733-d658-4410-b0e6-e145d390e97f', name: 'Fruits', slug: 'fruits' },
+  { id: '38033e62-fe14-4478-ad44-332cb23b0401', name: 'Dairy & Eggs', slug: 'dairy-eggs' },
+  { id: 'de2785fb-4ca6-4c77-b91c-62f96250a700', name: 'Spices & Herbs', slug: 'spices-herbs' },
+  { id: '809ad623-b3b6-4ab3-a339-8d78e8f2f8a5', name: 'Honey & Preserves', slug: 'honey-preserves' },
+  { id: '6fc237b9-c094-49f7-9682-3946bec1137f', name: 'Organic Fertilizers', slug: 'organic-fertilizers' },
+  { id: '104e2e65-0c4b-4f34-8082-3d5443fbb65c', name: 'Seeds & Plants', slug: 'seeds-plants' },
 ];
 
 const CONDITIONS = [
@@ -77,12 +77,19 @@ export default function EditProduct() {
         return;
       }
 
+      // Match category UUID
+      let matchedCatId = data.category_id || data.category?.id || '';
+      if (!matchedCatId && data.category?.slug) {
+        const found = CATEGORIES.find((c) => c.slug === data.category.slug);
+        if (found) matchedCatId = found.id;
+      }
+
       // Populate form fields
       setValue('title', data.title || '');
       setValue('description', data.description || '');
       setValue('price', data.price != null ? String(data.price) : '');
       setValue('quantity', data.quantity != null ? String(data.quantity) : '0');
-      setValue('category', data.category?.slug || data.category_id || '');
+      setValue('category_id', matchedCatId);
       setValue('condition', data.condition || 'new');
       setValue('pickup_available', data.pickup_available ?? true);
       setValue('delivery_available', data.delivery_available ?? false);
@@ -127,7 +134,7 @@ export default function EditProduct() {
     // Revoke temporary object URL
     URL.revokeObjectURL(newImagePreviews[index]);
     setNewImageFiles((prev) => prev.filter((_, i) => i !== index));
-    setNewImagePreviews((prev) => prev.filter((_, i) => i !== index));
+    setNewImagePreviews((prev) => [...prev, ...newPreviews]);
   };
 
   const onSubmit = async (data) => {
@@ -145,15 +152,14 @@ export default function EditProduct() {
       // Combine existing images with newly uploaded images
       const finalImagesList = [...existingImages, ...uploadedUrls];
 
-      // 2. Update Product API
+      // 2. Update Product API with Category UUID
       const updated = await updateProduct(id, {
         title: data.title,
         description: data.description,
         price: parseFloat(data.price),
         quantity: parseInt(data.quantity, 10),
         condition: data.condition || 'new',
-        category_id: data.category || null,
-        category: data.category || null,
+        category_id: data.category_id || null,
         pickup_available: Boolean(data.pickup_available),
         delivery_available: Boolean(data.delivery_available),
         images: finalImagesList,
@@ -343,17 +349,17 @@ export default function EditProduct() {
                 </label>
                 <select
                   className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white"
-                  {...register('category', { required: 'Please select a category' })}
+                  {...register('category_id', { required: 'Please select a category' })}
                 >
                   <option value="">Select Category</option>
                   {CATEGORIES.map((c) => (
-                    <option key={c.id} value={c.slug}>
+                    <option key={c.id} value={c.id}>
                       {c.name}
                     </option>
                   ))}
                 </select>
-                {errors.category && (
-                  <p className="mt-1 text-xs text-danger-500">{errors.category.message}</p>
+                {errors.category_id && (
+                  <p className="mt-1 text-xs text-danger-500">{errors.category_id.message}</p>
                 )}
               </div>
 

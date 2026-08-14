@@ -331,15 +331,24 @@ export async function createProduct(sellerId, productData, accessToken) {
     .replace(/(^-|-$)/g, '');
   const slug = `${baseSlug}-${Date.now()}`;
 
-  // Validate category_id
-  let validCategoryId = category_id;
-  if (!validCategoryId && rawCategory) {
-    const { data: catRow } = await supabaseAdmin
-      .from('categories')
-      .select('id')
-      .ilike('slug', rawCategory)
-      .single();
-    if (catRow) validCategoryId = catRow.id;
+  // Validate category_id (support direct UUID, or lookup by slug/name)
+  let validCategoryId = null;
+  const targetCategory = category_id || rawCategory || productData.category;
+
+  if (targetCategory) {
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(targetCategory));
+    if (isUUID) {
+      validCategoryId = targetCategory;
+    } else {
+      const { data: catRow } = await supabaseAdmin
+        .from('categories')
+        .select('id')
+        .or(`slug.eq.${targetCategory},name.ilike.${targetCategory}`)
+        .maybeSingle();
+      if (catRow) {
+        validCategoryId = catRow.id;
+      }
+    }
   }
 
   const insertPayload = {
@@ -433,15 +442,26 @@ export async function updateProduct(productId, sellerId, updates, accessToken) {
     images,
   } = updates;
 
-  // Validate category_id if raw category slug provided
-  let validCategoryId = category_id;
-  if (!validCategoryId && rawCategory) {
-    const { data: catRow } = await supabaseAdmin
-      .from('categories')
-      .select('id')
-      .ilike('slug', rawCategory)
-      .single();
-    if (catRow) validCategoryId = catRow.id;
+  // Validate category_id (support direct UUID, or lookup by slug/name)
+  let validCategoryId = undefined;
+  const targetCategory = category_id !== undefined ? category_id : (rawCategory !== undefined ? rawCategory : updates.category);
+
+  if (targetCategory) {
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(targetCategory));
+    if (isUUID) {
+      validCategoryId = targetCategory;
+    } else {
+      const { data: catRow } = await supabaseAdmin
+        .from('categories')
+        .select('id')
+        .or(`slug.eq.${targetCategory},name.ilike.${targetCategory}`)
+        .maybeSingle();
+      if (catRow) {
+        validCategoryId = catRow.id;
+      }
+    }
+  } else if (targetCategory === null || targetCategory === '') {
+    validCategoryId = null;
   }
 
   const updatePayload = {};

@@ -12,6 +12,7 @@ import reviewsRoutes from './routes/reviews.js';
 import reportsRoutes from './routes/reports.js';
 import paymentsRoutes from './routes/payments.js';
 import mapRoutes from './routes/map.js';
+import categoriesRoutes from './routes/categories.js';
 import { logger } from './utils/logger.js';
 
 const app = express();
@@ -47,6 +48,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productsRoutes);
+app.use('/api/categories', categoriesRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/conversations', conversationsRoutes);
 app.use('/api/reviews', reviewsRoutes);
