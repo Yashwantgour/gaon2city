@@ -1,44 +1,122 @@
 import { motion } from 'framer-motion';
-import { useState, useEffect } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
 import {
-  HiOutlineMagnifyingGlass,
   HiOutlineAdjustmentsHorizontal,
-  HiOutlineMapPin,
-  HiOutlineXMark,
+  HiOutlineMagnifyingGlass,
   HiChevronDown,
+  HiOutlineMapPin,
   HiOutlineSquares2X2,
   HiOutlineMap,
+  HiOutlineXMark,
 } from 'react-icons/hi2';
 import ProductGrid from '../components/product/ProductGrid';
 import MarketplaceMap from '../components/map/MarketplaceMap';
-import { CATEGORIES, CONDITIONS, SELLER_TYPES, RADIUS_OPTIONS, SORT_OPTIONS } from '../utils/constants';
+import { listProducts, getNearbyProducts } from '../services/productsApi';
 import { setProducts, setLoading, setError } from '../features/products/productsSlice';
 import useLocation from '../hooks/useLocation';
 import useDebounce from '../hooks/useDebounce';
-import { listProducts, getNearbyProducts } from '../services/productsApi';
+import {
+  CATEGORIES,
+  CONDITIONS,
+  SELLER_TYPES,
+  SORT_OPTIONS,
+  RADIUS_OPTIONS,
+} from '../utils/constants';
 
 export default function Marketplace() {
   const dispatch = useDispatch();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const products = useSelector((state) => state.products.items);
   const isLoading = useSelector((state) => state.products.isLoading);
-  const { radius, changeRadius, locationName, latitude, longitude, openDrawer } = useLocation();
+  const { radius, changeRadius, latitude, longitude } = useLocation();
 
-  const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
+  // Read URL parameters
+  const urlCategory = searchParams.get('category') || null;
+  const urlSearch = searchParams.get('search') || '';
+  const urlSort = searchParams.get('sort') || 'newest';
+
+  const [searchInput, setSearchInput] = useState(urlSearch);
   const [showFilters, setShowFilters] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'map'
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || null);
+  const [selectedCategory, setSelectedCategory] = useState(urlCategory);
   const [selectedCondition, setSelectedCondition] = useState(null);
   const [selectedSellerType, setSelectedSellerType] = useState(null);
-  const [selectedSort, setSelectedSort] = useState(searchParams.get('sort') || 'newest');
+  const [selectedSort, setSelectedSort] = useState(urlSort);
 
   const debouncedSearch = useDebounce(searchInput, 400);
 
+  // Sync state when URL search params change (e.g. from navbar/home or direct link)
+  useEffect(() => {
+    const nextCat = searchParams.get('category');
+    if (nextCat === 'all') {
+      setSelectedCategory(null);
+    } else {
+      setSelectedCategory(nextCat || null);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const nextSearch = searchParams.get('search') || '';
+    setSearchInput(nextSearch);
+  }, [searchParams]);
+
+  useEffect(() => {
+    const nextSort = searchParams.get('sort') || 'newest';
+    setSelectedSort(nextSort);
+  }, [searchParams]);
+
+  // Handle category chip selection and URL update
+  const handleCategorySelect = useCallback((slug) => {
+    const nextSlug = selectedCategory === slug ? null : slug;
+    setSelectedCategory(nextSlug);
+    setSearchParams((prev) => {
+      const p = new URLSearchParams(prev);
+      if (nextSlug) {
+        p.set('category', nextSlug);
+      } else {
+        p.delete('category');
+      }
+      return p;
+    }, { replace: true });
+  }, [selectedCategory, setSearchParams]);
+
+  // Handle sort selection and URL update
+  const handleSortSelect = useCallback((sortValue) => {
+    setSelectedSort(sortValue);
+    setSortOpen(false);
+    setSearchParams((prev) => {
+      const p = new URLSearchParams(prev);
+      if (sortValue && sortValue !== 'newest') {
+        p.set('sort', sortValue);
+      } else {
+        p.delete('sort');
+      }
+      return p;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  // Clear all active filters
+  const handleClearFilters = useCallback(() => {
+    setSelectedCategory(null);
+    setSelectedCondition(null);
+    setSelectedSellerType(null);
+    setPriceMin('');
+    setPriceMax('');
+    setSearchInput('');
+    setSearchParams((prev) => {
+      const p = new URLSearchParams(prev);
+      p.delete('category');
+      p.delete('search');
+      return p;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  // Fetch products matching all active filters
   useEffect(() => {
     async function fetchFilteredProducts() {
       dispatch(setLoading(true));
@@ -49,19 +127,30 @@ export default function Marketplace() {
             lng: longitude,
             radius: radius || 10,
           });
-          let filtered = nearby || [];
+          let filtered = Array.isArray(nearby) ? nearby : [];
+
           if (debouncedSearch) {
+            const query = debouncedSearch.toLowerCase();
             filtered = filtered.filter(
               (p) =>
-                p.title?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-                p.description?.toLowerCase().includes(debouncedSearch.toLowerCase())
+                p.title?.toLowerCase().includes(query) ||
+                p.description?.toLowerCase().includes(query)
             );
           }
-          if (selectedCategory) {
+
+          if (selectedCategory && selectedCategory !== 'all') {
+            const matchedCategory = CATEGORIES.find(
+              (c) => c.slug === selectedCategory || c.id === selectedCategory
+            );
             filtered = filtered.filter(
-              (p) => p.category?.slug === selectedCategory || p.category_id === selectedCategory
+              (p) =>
+                p.category?.slug === selectedCategory ||
+                p.category?.id === selectedCategory ||
+                p.category_id === selectedCategory ||
+                (matchedCategory && p.category_id === matchedCategory.id)
             );
           }
+
           if (selectedCondition) {
             filtered = filtered.filter((p) => p.condition === selectedCondition);
           }
@@ -75,7 +164,7 @@ export default function Marketplace() {
         } else {
           const res = await listProducts({
             search: debouncedSearch || undefined,
-            category: selectedCategory || undefined,
+            category: selectedCategory && selectedCategory !== 'all' ? selectedCategory : undefined,
             condition: selectedCondition || undefined,
             minPrice: priceMin || undefined,
             maxPrice: priceMax || undefined,
@@ -86,9 +175,10 @@ export default function Marketplace() {
                 ? 'price-high'
                 : 'newest',
           });
-          dispatch(setProducts(res.products || []));
+          dispatch(setProducts(res?.products || []));
         }
       } catch (err) {
+        console.warn('Marketplace fetch error:', err);
         dispatch(setError(err?.message || 'Failed to load products'));
         dispatch(setProducts([]));
       } finally {
@@ -110,6 +200,11 @@ export default function Marketplace() {
     radius,
   ]);
 
+  const activeCategoryObj = useMemo(() => {
+    if (!selectedCategory || selectedCategory === 'all') return null;
+    return CATEGORIES.find((c) => c.slug === selectedCategory || c.id === selectedCategory) || null;
+  }, [selectedCategory]);
+
   const activeFilterCount = [
     selectedCategory,
     selectedCondition,
@@ -118,47 +213,41 @@ export default function Marketplace() {
     priceMax,
   ].filter(Boolean).length;
 
-  const handleClearFilters = () => {
-    setSelectedCategory(null);
-    setSelectedCondition(null);
-    setSelectedSellerType(null);
-    setPriceMin('');
-    setPriceMax('');
-    setSearchInput('');
-  };
-
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+      {/* Header & View Mode Switcher */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
       >
         <div>
-          <h1 className="text-2xl font-bold text-neutral-800 mb-1">Marketplace</h1>
-          <p className="text-sm text-neutral-500">
-            Discover fresh produce and handmade goods from rural producers
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-neutral-900 tracking-tight">
+            Marketplace
+          </h1>
+          <p className="text-sm text-neutral-500 mt-0.5">
+            Discover authentic rural produce, crafts, and goods from verified local producers
           </p>
         </div>
 
         {/* View Mode Switcher (Grid vs Map) */}
-        <div className="flex items-center gap-1 p-1 bg-neutral-100 rounded-xl self-start sm:self-auto border border-neutral-200/60">
+        <div className="flex items-center gap-1 p-1 bg-neutral-100 rounded-2xl self-start sm:self-auto border border-neutral-200/60 shadow-2xs">
           <button
             onClick={() => setViewMode('grid')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               viewMode === 'grid'
-                ? 'bg-white text-primary-600 shadow-xs'
+                ? 'bg-white text-primary-700 shadow-xs'
                 : 'text-neutral-600 hover:text-neutral-900'
             }`}
           >
             <HiOutlineSquares2X2 className="w-4 h-4" />
-            <span>Grid</span>
+            <span>Grid View</span>
           </button>
           <button
             onClick={() => setViewMode('map')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               viewMode === 'map'
-                ? 'bg-white text-primary-600 shadow-xs'
+                ? 'bg-white text-primary-700 shadow-xs'
                 : 'text-neutral-600 hover:text-neutral-900'
             }`}
           >
@@ -168,16 +257,16 @@ export default function Marketplace() {
         </div>
       </motion.div>
 
-      {/* Search & Filter Bar */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      {/* Search & Main Controls Bar */}
+      <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <HiOutlineMagnifyingGlass className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
           <input
             type="text"
-            placeholder="Search products..."
+            placeholder="Search produce, wheat, mangoes, crafts..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-neutral-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+            className="w-full pl-10 pr-4 py-2.5 rounded-2xl border border-neutral-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all shadow-2xs"
           />
           {searchInput && (
             <button
@@ -189,29 +278,27 @@ export default function Marketplace() {
           )}
         </div>
 
+        {/* Sort Dropdown */}
         <div className="relative">
           <button
             onClick={() => setSortOpen(!sortOpen)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-neutral-200 bg-white text-sm font-medium text-neutral-700 hover:border-neutral-300 transition-colors w-full sm:w-auto"
+            className="flex items-center justify-between gap-2 px-4 py-2.5 rounded-2xl border border-neutral-200 bg-white text-sm font-medium text-neutral-700 hover:border-neutral-300 transition-colors w-full sm:w-auto shadow-2xs cursor-pointer"
           >
-            {SORT_OPTIONS.find((s) => s.value === selectedSort)?.label || 'Sort'}
-            <HiChevronDown className="w-4 h-4" />
+            <span>{SORT_OPTIONS.find((s) => s.value === selectedSort)?.label || 'Sort'}</span>
+            <HiChevronDown className="w-4 h-4 text-neutral-400" />
           </button>
           {sortOpen && (
             <motion.div
               initial={{ opacity: 0, y: -5 }}
               animate={{ opacity: 1, y: 0 }}
-              className="absolute right-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-neutral-100 py-1 z-20 min-w-[180px]"
+              className="absolute right-0 top-full mt-1.5 bg-white rounded-2xl shadow-lg border border-neutral-100 py-1.5 z-20 min-w-[190px]"
             >
               {SORT_OPTIONS.map((option) => (
                 <button
                   key={option.value}
-                  onClick={() => {
-                    setSelectedSort(option.value);
-                    setSortOpen(false);
-                  }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-neutral-50 transition-colors ${
-                    selectedSort === option.value ? 'text-primary-600 font-medium bg-primary-50' : 'text-neutral-700'
+                  onClick={() => handleSortSelect(option.value)}
+                  className={`w-full text-left px-4 py-2 text-xs font-semibold hover:bg-neutral-50 transition-colors cursor-pointer ${
+                    selectedSort === option.value ? 'text-primary-600 bg-primary-50' : 'text-neutral-700'
                   }`}
                 >
                   {option.label}
@@ -221,18 +308,19 @@ export default function Marketplace() {
           )}
         </div>
 
+        {/* Filters Toggle Button */}
         <button
           onClick={() => setShowFilters(!showFilters)}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
+          className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl border text-sm font-medium transition-colors shadow-2xs cursor-pointer ${
             showFilters || activeFilterCount > 0
-              ? 'border-primary-500 bg-primary-50 text-primary-600'
+              ? 'border-primary-500 bg-primary-50 text-primary-700 font-bold'
               : 'border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300'
           }`}
         >
           <HiOutlineAdjustmentsHorizontal className="w-4 h-4" />
-          Filters
+          <span>Filters</span>
           {activeFilterCount > 0 && (
-            <span className="w-5 h-5 rounded-full bg-primary-500 text-white text-xs flex items-center justify-center">
+            <span className="w-5 h-5 rounded-full bg-primary-600 text-white text-[11px] font-bold flex items-center justify-center">
               {activeFilterCount}
             </span>
           )}
@@ -240,10 +328,10 @@ export default function Marketplace() {
       </div>
 
       {/* Category Quick Chips */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-3 scrollbar-none">
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
         <button
-          onClick={() => setSelectedCategory(null)}
-          className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+          onClick={() => handleCategorySelect(null)}
+          className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
             !selectedCategory
               ? 'bg-primary-600 text-white shadow-xs'
               : 'bg-white text-neutral-600 border border-neutral-200 hover:border-neutral-300'
@@ -254,10 +342,10 @@ export default function Marketplace() {
         {CATEGORIES.map((cat) => (
           <button
             key={cat.id}
-            onClick={() => setSelectedCategory(selectedCategory === cat.slug ? null : cat.slug)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
+            onClick={() => handleCategorySelect(cat.slug)}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
               selectedCategory === cat.slug
-                ? 'bg-primary-600 text-white font-semibold shadow-xs'
+                ? 'bg-primary-600 text-white font-bold shadow-xs'
                 : 'bg-white text-neutral-600 border border-neutral-200 hover:border-neutral-300'
             }`}
           >
@@ -268,7 +356,7 @@ export default function Marketplace() {
       </div>
 
       {/* Radius Quick Selector */}
-      <div className="flex flex-wrap items-center gap-2 mb-6">
+      <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium text-neutral-500 flex items-center gap-1">
           <HiOutlineMapPin className="w-3.5 h-3.5 text-primary-500" />
           Radius:
@@ -276,15 +364,15 @@ export default function Marketplace() {
         <div className="flex gap-1.5">
           {RADIUS_OPTIONS.map((r) => (
             <button
-              key={r}
-              onClick={() => changeRadius(r)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                radius === r
+              key={r.label}
+              onClick={() => changeRadius(r.value)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                radius === r.value
                   ? 'bg-primary-500 text-white shadow-xs'
                   : 'bg-white text-neutral-600 border border-neutral-200 hover:border-neutral-300'
               }`}
             >
-              {r} km
+              {r.label}
             </button>
           ))}
         </div>
@@ -296,14 +384,16 @@ export default function Marketplace() {
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
           exit={{ opacity: 0, height: 0 }}
-          className="bg-white rounded-2xl border border-neutral-100 p-4 sm:p-6 mb-6"
+          className="bg-white rounded-3xl border border-neutral-100 p-5 sm:p-6 shadow-xs"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-2">Category</label>
+              <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-2">
+                Category
+              </label>
               <select
                 value={selectedCategory || ''}
-                onChange={(e) => setSelectedCategory(e.target.value || null)}
+                onChange={(e) => handleCategorySelect(e.target.value || null)}
                 className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white"
               >
                 <option value="">All Categories</option>
@@ -316,11 +406,13 @@ export default function Marketplace() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-2">Condition</label>
+              <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-2">
+                Condition
+              </label>
               <select
                 value={selectedCondition || ''}
                 onChange={(e) => setSelectedCondition(e.target.value || null)}
-                className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white"
               >
                 <option value="">Any Condition</option>
                 {CONDITIONS.map((c) => (
@@ -330,11 +422,13 @@ export default function Marketplace() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-2">Seller Type</label>
+              <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-2">
+                Seller Type
+              </label>
               <select
                 value={selectedSellerType || ''}
                 onChange={(e) => setSelectedSellerType(e.target.value || null)}
-                className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white"
               >
                 <option value="">All Sellers</option>
                 {SELLER_TYPES.map((s) => (
@@ -344,21 +438,23 @@ export default function Marketplace() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-2">Price Range</label>
+              <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-2">
+                Price Range (₹)
+              </label>
               <div className="flex gap-2">
                 <input
                   type="number"
                   placeholder="Min"
                   value={priceMin}
                   onChange={(e) => setPriceMin(e.target.value)}
-                  className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white"
                 />
                 <input
                   type="number"
                   placeholder="Max"
                   value={priceMax}
                   onChange={(e) => setPriceMax(e.target.value)}
-                  className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white"
                 />
               </div>
             </div>
@@ -368,7 +464,7 @@ export default function Marketplace() {
             <div className="mt-4 pt-3 border-t border-neutral-100 flex justify-end">
               <button
                 onClick={handleClearFilters}
-                className="text-sm text-primary-600 font-medium hover:text-primary-700"
+                className="text-xs text-primary-600 font-bold hover:text-primary-700 cursor-pointer"
               >
                 Clear all filters
               </button>
@@ -377,38 +473,23 @@ export default function Marketplace() {
         </motion.div>
       )}
 
-      {/* Category Pills */}
-      <div className="flex gap-2 mb-6 overflow-x-auto styled-scrollbar scroll-fade pb-2 px-1">
-        <button
-          onClick={() => setSelectedCategory(null)}
-          className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${
-            !selectedCategory
-              ? 'bg-primary-500 text-white'
-              : 'bg-white text-neutral-600 border border-neutral-200 hover:border-neutral-300'
-          }`}
-        >
-          All
-        </button>
-        {CATEGORIES.map((cat) => (
-          <button
-            key={cat.id}
-            onClick={() => setSelectedCategory(selectedCategory === cat.slug ? null : cat.slug)}
-            className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-1.5 ${
-              selectedCategory === cat.slug
-                ? 'bg-primary-500 text-white'
-                : 'bg-white text-neutral-600 border border-neutral-200 hover:border-neutral-300'
-            }`}
-          >
-            <span>{cat.icon}</span>
-            {cat.name}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-neutral-500">
-          {products.length} product{products.length !== 1 ? 's' : ''} found
-        </p>
+      {/* Results Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {activeCategoryObj ? (
+            <div className="flex items-center gap-1.5 text-sm font-bold text-neutral-800">
+              <span className="text-lg">{activeCategoryObj.icon}</span>
+              <span>{activeCategoryObj.name}</span>
+              <span className="text-neutral-400 font-normal text-xs">
+                ({products.length} {products.length === 1 ? 'item' : 'items'})
+              </span>
+            </div>
+          ) : (
+            <p className="text-sm font-semibold text-neutral-700">
+              {products.length} {products.length === 1 ? 'product' : 'products'} available
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Main View: Grid vs Interactive Map */}

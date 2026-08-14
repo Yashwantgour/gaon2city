@@ -144,16 +144,23 @@ export async function listProducts({
     query = query.eq('seller_id', seller_id);
   }
 
-  // Filter by category slug
-  if (category) {
-    const { data: catData } = await supabaseAdmin
-      .from('categories')
-      .select('id')
-      .eq('slug', category)
-      .single();
+  // Filter by category slug or UUID
+  if (category && category !== 'all') {
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(category));
+    if (isUUID) {
+      query = query.eq('category_id', category);
+    } else {
+      const { data: catData } = await supabaseAdmin
+        .from('categories')
+        .select('id')
+        .eq('slug', String(category).toLowerCase())
+        .maybeSingle();
 
-    if (catData) {
-      query = query.eq('category_id', catData.id);
+      if (catData?.id) {
+        query = query.eq('category_id', catData.id);
+      } else {
+        query = query.eq('category_id', '00000000-0000-0000-0000-000000000000');
+      }
     }
   }
 
