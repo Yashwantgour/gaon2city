@@ -450,7 +450,6 @@ export async function updateProduct(productId, sellerId, updates, accessToken) {
   if (validCategoryId !== undefined) updatePayload.category_id = validCategoryId || null;
   if (price !== undefined) updatePayload.price = parseFloat(price);
   if (quantity !== undefined) updatePayload.quantity = parseInt(quantity);
-  if (unit !== undefined) updatePayload.unit = unit;
   if (condition !== undefined) updatePayload.condition = condition;
   if (pickup_available !== undefined) {
     updatePayload.pickup_available = pickup_available === true || pickup_available === 'true';

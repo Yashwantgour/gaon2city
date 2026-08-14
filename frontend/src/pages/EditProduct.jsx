@@ -82,7 +82,6 @@ export default function EditProduct() {
       setValue('description', data.description || '');
       setValue('price', data.price != null ? String(data.price) : '');
       setValue('quantity', data.quantity != null ? String(data.quantity) : '0');
-      setValue('unit', data.unit || 'unit');
       setValue('category', data.category?.slug || data.category_id || '');
       setValue('condition', data.condition || 'new');
       setValue('pickup_available', data.pickup_available ?? true);
@@ -152,7 +151,6 @@ export default function EditProduct() {
         description: data.description,
         price: parseFloat(data.price),
         quantity: parseInt(data.quantity, 10),
-        unit: data.unit || 'unit',
         condition: data.condition || 'new',
         category_id: data.category || null,
         category: data.category || null,
@@ -379,7 +377,7 @@ export default function EditProduct() {
           <div className="bg-white rounded-2xl border border-neutral-100 p-5 shadow-xs space-y-4">
             <h3 className="text-sm font-semibold text-neutral-800">Pricing & Inventory</h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
                 label="Price (₹)"
                 type="number"
@@ -400,13 +398,6 @@ export default function EditProduct() {
                   required: 'Quantity is required',
                   min: { value: 0, message: 'Cannot be negative' },
                 })}
-              />
-
-              <Input
-                label="Unit (e.g. kg, quintal, bag)"
-                placeholder="kg"
-                error={errors.unit?.message}
-                {...register('unit')}
               />
             </div>
 

@@ -1,0 +1,24 @@
+-- Schema definition for public.products table in Gaon2City
+-- Aligns backend/frontend data contracts with PostgreSQL columns.
+
+-- Optional: If product unit column is ever added in future:
+-- ALTER TABLE public.products ADD COLUMN IF NOT EXISTS unit TEXT DEFAULT 'unit';
+
+-- Current Canonical Columns:
+-- id (UUID PRIMARY KEY)
+-- seller_id (UUID REFERENCES profiles(id))
+-- category_id (UUID REFERENCES categories(id))
+-- title (TEXT)
+-- slug (TEXT UNIQUE)
+-- description (TEXT)
+-- price (NUMERIC)
+-- quantity (INTEGER)
+-- condition (TEXT)
+-- status (TEXT)
+-- latitude (NUMERIC)
+-- longitude (NUMERIC)
+-- location (GEOMETRY/JSON)
+-- pickup_available (BOOLEAN)
+-- delivery_available (BOOLEAN)
+-- created_at (TIMESTAMPTZ)
+-- update_at (TIMESTAMPTZ)
