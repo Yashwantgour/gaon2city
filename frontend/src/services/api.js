@@ -8,7 +8,8 @@ const API_BASE_URL =
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 15000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -16,18 +17,31 @@ const api = axios.create({
 
 api.interceptors.request.use(
   async (config) => {
-    let token = localStorage.getItem('access_token');
-    if (!token) {
-      const { data } = await supabase.auth.getSession();
-      token = data?.session?.access_token || null;
-      if (token) {
-        localStorage.setItem('access_token', token);
+    try {
+      let token = localStorage.getItem('access_token');
+
+      if (!token) {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        token = session?.access_token || null;
+
+        if (token) {
+          localStorage.setItem('access_token', token);
+        }
       }
+
+      if (token) {
+        config.headers = config.headers || {};
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+
+      return config;
+    } catch (error) {
+      console.error('Auth token error:', error);
+      return config;
     }
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
   },
   (error) => Promise.reject(error)
 );
@@ -35,8 +49,24 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
-    const message = error.response?.data?.message || error.message || 'Something went wrong';
-    return Promise.reject({ message, status: error.response?.status });
+    console.error('API Error:', {
+      url: error.config?.url,
+      baseURL: error.config?.baseURL,
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message,
+    });
+
+    const message =
+      error.response?.data?.message ||
+      error.message ||
+      'Something went wrong';
+
+    return Promise.reject({
+      message,
+      status: error.response?.status,
+      data: error.response?.data,
+    });
   }
 );
 

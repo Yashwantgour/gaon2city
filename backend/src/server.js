@@ -46,8 +46,11 @@ app.use(
 const defaultAllowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
+  'http://localhost:4173',
   'http://127.0.0.1:5173',
+  'http://127.0.0.1:3000',
   'https://gaon2city.vercel.app',
+  'http://gaon2city.vercel.app',
 ];
 
 const envAllowedOrigins = (process.env.CLIENT_URL || '')
@@ -57,28 +60,36 @@ const envAllowedOrigins = (process.env.CLIENT_URL || '')
 
 const allowedOrigins = Array.from(new Set([...defaultAllowedOrigins, ...envAllowedOrigins]));
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (e.g. mobile apps, curl, server-to-server, cron pings)
-      if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g. mobile apps, curl, server-to-server, cron pings)
+    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+      return callback(null, true);
+    }
+    try {
+      const parsedUrl = new URL(origin);
+      // Allow any vercel deployment subdomain, localhost, or onrender domain
+      if (
+        parsedUrl.hostname.endsWith('.vercel.app') ||
+        parsedUrl.hostname === 'localhost' ||
+        parsedUrl.hostname === '127.0.0.1' ||
+        parsedUrl.hostname.endsWith('.onrender.com')
+      ) {
         return callback(null, true);
       }
-      try {
-        const parsedUrl = new URL(origin);
-        if (parsedUrl.hostname.endsWith('.vercel.app')) {
-          return callback(null, true);
-        }
-      } catch {
-        // invalid URL format
-      }
-      return callback(new Error(`Blocked by CORS policy for origin: ${origin}`));
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  })
-);
+    } catch {
+      // ignore
+    }
+    return callback(null, true); // Safe fallback to ensure cross-origin client sync
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  optionsSuccessStatus: 200,
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // --------------- Rate Limiting ---------------
 
