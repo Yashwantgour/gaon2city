@@ -20,10 +20,22 @@ import { listOrders } from '../services/ordersApi';
 import { showToast } from '../features/ui/uiSlice';
 
 function SellerProductRow({ product, index, navigate, handleDeleteProduct }) {
-  const [imgError, setImgError] = useState(false);
-  const imageSource = typeof product.images?.[0] === 'string'
-    ? product.images[0]
-    : product.images?.[0]?.storage_path;
+  const rawImages = (product.images || [])
+    .map((img) => (typeof img === 'string' ? img : img?.storage_path))
+    .filter(Boolean);
+
+  const [activeImgIndex, setActiveImgIndex] = useState(0);
+  const [allImagesFailed, setAllImagesFailed] = useState(rawImages.length === 0);
+
+  const imageSource = rawImages[activeImgIndex] || null;
+
+  const handleImageError = () => {
+    if (activeImgIndex < rawImages.length - 1) {
+      setActiveImgIndex((prev) => prev + 1);
+    } else {
+      setAllImagesFailed(true);
+    }
+  };
 
   const isOutOfStock = (Number(product.quantity) || 0) <= 0 || product.status === 'out_of_stock';
 
@@ -34,14 +46,14 @@ function SellerProductRow({ product, index, navigate, handleDeleteProduct }) {
       transition={{ delay: index * 0.05 }}
       className="bg-white rounded-2xl border border-neutral-100 p-4 flex items-center gap-4"
     >
-      {!imgError && imageSource ? (
+      {!allImagesFailed && imageSource ? (
         <img
           src={imageSource}
           alt={product.title}
           className={`w-14 h-14 rounded-xl object-cover bg-neutral-100 shrink-0 ${
             isOutOfStock ? 'opacity-80 grayscale-20' : ''
           }`}
-          onError={() => setImgError(true)}
+          onError={handleImageError}
         />
       ) : (
         <div className="w-14 h-14 rounded-xl bg-neutral-50 flex items-center justify-center text-lg shrink-0 border border-neutral-100 text-neutral-400">
