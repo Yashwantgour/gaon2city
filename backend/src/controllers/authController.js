@@ -6,7 +6,7 @@ import * as authService from '../services/authService.js';
  */
 export async function getMe(req, res, next) {
   try {
-    const profile = await authService.getMe(req.user.id);
+    const profile = await authService.getMe(req.user.id, req.accessToken);
     res.json(profile);
   } catch (err) {
     next(err);
@@ -32,7 +32,7 @@ export async function getSellerProfile(req, res, next) {
  */
 export async function updateProfile(req, res, next) {
   try {
-    const updated = await authService.updateProfile(req.user.id, req.body);
+    const updated = await authService.updateProfile(req.user.id, req.body, req.accessToken);
     res.json(updated);
   } catch (err) {
     next(err);

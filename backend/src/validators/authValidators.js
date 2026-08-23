@@ -38,7 +38,7 @@ export const updateProfileValidators = [
     .withMessage('Postal code must be a 6-digit PIN code'),
   body('seller_type')
     .optional()
-    .isIn(['farmer', 'artisan', 'trader', 'individual'])
+    .isIn(['farmer', 'artisan', 'trader', 'individual', 'local_shop', 'business', 'service_provider', 'admin'])
     .withMessage('Invalid seller type'),
 ];
 
