@@ -89,7 +89,7 @@ export async function updateProfile(userId, updates, accessToken) {
     'district', 'state', 'postal_code', 'seller_type',
   ];
 
-  const safeUpdates = { id: userId };
+  const safeUpdates = {};
   for (const key of allowedFields) {
     if (updates[key] !== undefined) {
       safeUpdates[key] = updates[key];
@@ -98,22 +98,36 @@ export async function updateProfile(userId, updates, accessToken) {
 
   safeUpdates.updated_at = new Date().toISOString();
 
-  // Try user client first, fallback to supabaseAdmin
+  // Try update using user-scoped client first
   let { data, error } = await client
     .from('profiles')
-    .upsert(safeUpdates)
+    .update(safeUpdates)
+    .eq('id', userId)
     .select()
-    .single();
+    .maybeSingle();
 
-  if (error && client !== supabaseAdmin) {
-    logger.warn(`User client upsert failed (${error.message}), retrying with supabaseAdmin...`);
+  // If user client update fails or returns no row, fallback to supabaseAdmin
+  if (error || !data) {
+    logger.warn(`User client profile update fallback (${error?.message || 'no row'}), trying supabaseAdmin...`);
     const adminRes = await supabaseAdmin
       .from('profiles')
-      .upsert(safeUpdates)
+      .update(safeUpdates)
+      .eq('id', userId)
       .select()
-      .single();
+      .maybeSingle();
     data = adminRes.data;
     error = adminRes.error;
+
+    // If still no row found to update, upsert with id
+    if (!data && !error) {
+      const upsertRes = await supabaseAdmin
+        .from('profiles')
+        .upsert({ id: userId, ...safeUpdates })
+        .select()
+        .single();
+      data = upsertRes.data;
+      error = upsertRes.error;
+    }
   }
 
   if (error) {

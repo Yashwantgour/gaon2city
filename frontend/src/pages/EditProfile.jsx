@@ -41,6 +41,23 @@ export default function EditProfile() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
 
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        name: user.name || '',
+        phone: user.phone || '',
+        village: user.village || '',
+        city: user.city || '',
+        district: user.district || '',
+        state: user.state || '',
+        postal_code: user.postal_code || '',
+        seller_type: user.seller_type || 'individual',
+        avatar_url: user.avatar_url || '',
+      });
+      setAvatarPreview(user.avatar_url || '');
+    }
+  }, [user]);
+
   if (!isAuthenticated || !user) {
     navigate('/login');
     return null;
