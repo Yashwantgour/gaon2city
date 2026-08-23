@@ -45,7 +45,6 @@ export async function authenticate(req, _res, next) {
         seller_type: meta.seller_type || 'individual',
         verification_status: 'unverified',
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       };
 
       const { data: created } = await supabaseAdmin

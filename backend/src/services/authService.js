@@ -93,8 +93,6 @@ export async function updateProfile(userId, updates, accessToken) {
     }
   }
 
-  safeUpdates.updated_at = new Date().toISOString();
-
   // Check if profile exists, if not get email from auth user
   const { data: existingProfile } = await supabaseAdmin
     .from('profiles')
