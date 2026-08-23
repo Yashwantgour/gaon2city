@@ -18,6 +18,7 @@ import AddProduct from './pages/AddProduct';
 import EditProduct from './pages/EditProduct';
 import Chat from './pages/Chat';
 import Directions from './pages/Directions';
+import Favorites from './pages/Favorites';
 import AdminDashboard from './pages/AdminDashboard';
 import NotFound from './pages/NotFound';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -87,6 +88,7 @@ function AppRoutes() {
           <Route path="/edit/:id" element={<EditProduct />} />
           <Route path="/chat" element={<Chat />} />
           <Route path="/directions" element={<Directions />} />
+          <Route path="/favorites" element={<Favorites />} />
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/*" element={<NotFound />} />
         </Route>

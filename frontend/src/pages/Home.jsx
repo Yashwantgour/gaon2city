@@ -14,6 +14,7 @@ import Button from '../components/common/Button';
 import { CATEGORIES } from '../utils/constants';
 import useLocation from '../hooks/useLocation';
 import { listProducts, getNearbyProducts } from '../services/productsApi';
+import { getFavoriteIds } from '../services/favoritesApi';
 
 const fadeInUp = {
   initial: { opacity: 0, y: 30 },
@@ -39,6 +40,41 @@ export default function Home() {
   const [recentProducts, setRecentProducts] = useState([]);
   const [isLoadingNearby, setIsLoadingNearby] = useState(true);
   const [isLoadingRecent, setIsLoadingRecent] = useState(true);
+  const [favoriteIds, setFavoriteIds] = useState(new Set());
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setFavoriteIds(new Set());
+      return;
+    }
+    let isCancelled = false;
+    async function loadUserFavorites() {
+      try {
+        const ids = await getFavoriteIds();
+        if (!isCancelled && Array.isArray(ids)) {
+          setFavoriteIds(new Set(ids));
+        }
+      } catch (err) {
+        console.warn('Failed to fetch favorite IDs:', err);
+      }
+    }
+    loadUserFavorites();
+    return () => {
+      isCancelled = true;
+    };
+  }, [isAuthenticated]);
+
+  const handleToggleFavorite = (productId) => {
+    setFavoriteIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) {
+        next.delete(productId);
+      } else {
+        next.add(productId);
+      }
+      return next;
+    });
+  };
 
   // Load genuine Nearby Products using user coordinates
   useEffect(() => {
@@ -235,7 +271,13 @@ export default function Home() {
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
               {nearbyProducts.slice(0, 4).map((product, index) => (
-                <ProductCard key={product.id} product={product} index={index} />
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  index={index}
+                  favoriteProductIds={favoriteIds}
+                  onToggleFavorite={handleToggleFavorite}
+                />
               ))}
             </div>
           )}
@@ -271,7 +313,13 @@ export default function Home() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
             {recentProducts.slice(0, 4).map((product, index) => (
-              <ProductCard key={product.id} product={product} index={index} />
+              <ProductCard
+                key={product.id}
+                product={product}
+                index={index}
+                favoriteProductIds={favoriteIds}
+                onToggleFavorite={handleToggleFavorite}
+              />
             ))}
           </div>
         )}

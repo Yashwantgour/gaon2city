@@ -13,6 +13,7 @@ import reportsRoutes from './routes/reports.js';
 import paymentsRoutes from './routes/payments.js';
 import mapRoutes from './routes/map.js';
 import categoriesRoutes from './routes/categories.js';
+import favoritesRoutes from './routes/favorites.js';
 import { logger } from './utils/logger.js';
 
 const app = express();
@@ -149,6 +150,7 @@ app.use('/api/reviews', reviewsRoutes);
 app.use('/api/reports', reportLimiter, reportsRoutes);
 app.use('/api/payments', paymentsRoutes);
 app.use('/api/map', mapRoutes);
+app.use('/api/favorites', favoritesRoutes);
 
 // Health check endpoint
 app.get('/api/health', (_req, res) => {

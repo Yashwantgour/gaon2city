@@ -13,6 +13,7 @@ import {
 } from 'react-icons/hi2';
 import ProductGrid from '../components/product/ProductGrid';
 import { listProducts, getNearbyProducts } from '../services/productsApi';
+import { getFavoriteIds } from '../services/favoritesApi';
 import { setProducts, setLoading, setError } from '../features/products/productsSlice';
 import useLocation from '../hooks/useLocation';
 import useDebounce from '../hooks/useDebounce';
@@ -29,7 +30,10 @@ export default function Marketplace() {
   const [searchParams, setSearchParams] = useSearchParams();
   const products = useSelector((state) => state.products.items);
   const isLoading = useSelector((state) => state.products.isLoading);
+  const { isAuthenticated } = useSelector((state) => state.auth);
   const { radius, changeRadius, latitude, longitude } = useLocation();
+
+  const [favoriteIds, setFavoriteIds] = useState(new Set());
 
   // Scroll ref & scroll indicators for Category Chip Bar
   const categoryScrollRef = useRef(null);
@@ -99,6 +103,41 @@ export default function Marketplace() {
     const nextSort = searchParams.get('sort') || 'newest';
     setSelectedSort(nextSort);
   }, [searchParams]);
+
+  // Load user favorite IDs
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setFavoriteIds(new Set());
+      return;
+    }
+    let isCancelled = false;
+    async function loadUserFavorites() {
+      try {
+        const ids = await getFavoriteIds();
+        if (!isCancelled && Array.isArray(ids)) {
+          setFavoriteIds(new Set(ids));
+        }
+      } catch (err) {
+        console.warn('Failed to fetch favorite IDs:', err);
+      }
+    }
+    loadUserFavorites();
+    return () => {
+      isCancelled = true;
+    };
+  }, [isAuthenticated]);
+
+  const handleToggleFavorite = (productId) => {
+    setFavoriteIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) {
+        next.delete(productId);
+      } else {
+        next.add(productId);
+      }
+      return next;
+    });
+  };
 
   // Handle category chip selection and URL update
   const handleCategorySelect = useCallback((slug) => {
@@ -527,7 +566,12 @@ export default function Marketplace() {
       </div>
 
       {/* Product Grid */}
-      <ProductGrid products={products} isLoading={isLoading} />
+      <ProductGrid
+        products={products}
+        isLoading={isLoading}
+        favoriteProductIds={favoriteIds}
+        onToggleFavorite={handleToggleFavorite}
+      />
     </div>
   );
 }

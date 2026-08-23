@@ -1,8 +1,8 @@
 import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
+import { Link, useNavigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
 import { HiOutlineMapPin, HiOutlineHeart, HiHeart, HiOutlineShoppingCart } from 'react-icons/hi2';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   formatPrice,
   formatDistance,
@@ -12,10 +12,28 @@ import {
 } from '../../utils/helpers';
 import { addToCart } from '../../features/cart/cartSlice';
 import { showToast } from '../../features/ui/uiSlice';
+import { addFavorite, removeFavorite } from '../../services/favoritesApi';
 
-export default function ProductCard({ product, index = 0 }) {
+export default function ProductCard({ product, index = 0, favoriteProductIds, onToggleFavorite }) {
   const dispatch = useDispatch();
-  const [isFavorite, setIsFavorite] = useState(false);
+  const navigate = useNavigate();
+  const { isAuthenticated } = useSelector((state) => state.auth);
+
+  // Determine favorite state from external prop set if provided
+  const isExternallyControlled = favoriteProductIds instanceof Set;
+  const [localFavorite, setLocalFavorite] = useState(false);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
+
+  const isFavorite = isExternallyControlled
+    ? favoriteProductIds.has(product.id)
+    : localFavorite;
+
+  // Sync localFavorite when favoriteProductIds changes (for non-controlled mode, remains false)
+  useEffect(() => {
+    if (isExternallyControlled) return;
+    // In uncontrolled mode, we don't pre-fetch per-card — it stays false until toggled
+  }, [isExternallyControlled]);
+
   const [activeImgIndex, setActiveImgIndex] = useState(0);
   const [allImagesFailed, setAllImagesFailed] = useState(false);
 
@@ -43,10 +61,42 @@ export default function ProductCard({ product, index = 0 }) {
     dispatch(showToast({ type: 'success', message: `${product.title} added to cart` }));
   };
 
-  const handleFavorite = (e) => {
+  const handleFavorite = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsFavorite(!isFavorite);
+
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+
+    if (favoriteLoading) return;
+    setFavoriteLoading(true);
+
+    try {
+      if (isFavorite) {
+        await removeFavorite(product.id);
+        if (onToggleFavorite) {
+          onToggleFavorite(product.id);
+        } else {
+          setLocalFavorite(false);
+        }
+        dispatch(showToast({ type: 'info', message: 'Removed from wishlist' }));
+      } else {
+        await addFavorite(product.id);
+        if (onToggleFavorite) {
+          onToggleFavorite(product.id);
+        } else {
+          setLocalFavorite(true);
+        }
+        dispatch(showToast({ type: 'success', message: 'Added to wishlist ❤️' }));
+      }
+    } catch (err) {
+      console.error('Favorite toggle failed:', err);
+      dispatch(showToast({ type: 'error', message: 'Failed to update wishlist' }));
+    } finally {
+      setFavoriteLoading(false);
+    }
   };
 
   return (
@@ -89,10 +139,13 @@ export default function ProductCard({ product, index = 0 }) {
               </div>
             )}
 
-            {/* Favorite Button (Always Active) */}
+            {/* Favorite Button */}
             <button
               onClick={handleFavorite}
-              className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-white/90 backdrop-blur-xs flex items-center justify-center shadow-xs hover:scale-110 transition-transform z-10"
+              disabled={favoriteLoading}
+              className={`absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-white/90 backdrop-blur-xs flex items-center justify-center shadow-xs hover:scale-110 transition-transform z-10 ${
+                favoriteLoading ? 'opacity-50' : ''
+              }`}
               aria-label="Toggle favorite"
             >
               {isFavorite ? (
@@ -201,3 +254,4 @@ export default function ProductCard({ product, index = 0 }) {
     </motion.div>
   );
 }
+

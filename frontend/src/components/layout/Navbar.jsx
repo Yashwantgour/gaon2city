@@ -12,6 +12,7 @@ import {
   HiOutlinePlus,
   HiOutlineChatBubbleLeftRight,
   HiChevronRight,
+  HiOutlineHeart,
 } from 'react-icons/hi2';
 import { selectCartCount } from '../../features/cart/cartSlice';
 import { openLocationDrawer } from '../../features/location/locationSlice';
@@ -142,6 +143,14 @@ export default function Navbar() {
                 )}
               </button>
             )}
+
+            <button
+              onClick={() => navigate('/favorites')}
+              className="p-2.5 rounded-xl text-neutral-600 hover:bg-neutral-100 transition-colors"
+              aria-label="Wishlist"
+            >
+              <HiOutlineHeart className="w-5 h-5" />
+            </button>
 
             <button
               onClick={() => navigate('/cart')}
@@ -281,6 +290,13 @@ export default function Navbar() {
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Sell Product
+                  </Link>
+                  <Link
+                    to="/favorites"
+                    className="block px-3 py-2 rounded-lg text-sm text-neutral-700 hover:bg-neutral-100"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    ❤️ My Wishlist
                   </Link>
                   <Link
                     to="/seller/dashboard"

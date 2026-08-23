@@ -29,6 +29,8 @@ import {
 } from '../utils/helpers';
 import { getProductById } from '../services/productsApi';
 import { getSellerReviews } from '../services/reviewsApi';
+import { checkFavorite, addFavorite, removeFavorite } from '../services/favoritesApi';
+import { showToast } from '../features/ui/uiSlice';
 
 export default function ProductDetails() {
   const { id } = useParams();
@@ -45,7 +47,9 @@ export default function ProductDetails() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [failedImageUrls, setFailedImageUrls] = useState(new Set());
   const [isFavorite, setIsFavorite] = useState(false);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [quantity, setQuantity] = useState(1);
+  const { isAuthenticated } = useSelector((state) => state.auth);
 
   const loadProduct = useCallback(async () => {
     setIsLoading(true);
@@ -88,6 +92,21 @@ export default function ProductDetails() {
       loadReviews();
     }
   }, [sellerId, loadReviews]);
+
+  // Check favorite status on mount
+  useEffect(() => {
+    if (!isAuthenticated || !id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await checkFavorite(id);
+        if (!cancelled) setIsFavorite(result.isFavorited);
+      } catch {
+        // silent — not critical
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [id, isAuthenticated]);
 
   if (isLoading && !activeProduct) {
     return (
@@ -280,8 +299,30 @@ export default function ProductDetails() {
             )}
 
             <button
-              onClick={() => setIsFavorite(!isFavorite)}
-              className="absolute top-4 right-4 p-3 rounded-full bg-white/90 backdrop-blur-xs text-neutral-700 hover:text-red-500 transition-colors shadow-sm z-10"
+              onClick={async () => {
+                if (!isAuthenticated) { navigate('/login'); return; }
+                if (favoriteLoading) return;
+                setFavoriteLoading(true);
+                try {
+                  if (isFavorite) {
+                    await removeFavorite(id);
+                    setIsFavorite(false);
+                    dispatch(showToast({ type: 'info', message: 'Removed from wishlist' }));
+                  } else {
+                    await addFavorite(id);
+                    setIsFavorite(true);
+                    dispatch(showToast({ type: 'success', message: 'Added to wishlist ❤️' }));
+                  }
+                } catch {
+                  dispatch(showToast({ type: 'error', message: 'Failed to update wishlist' }));
+                } finally {
+                  setFavoriteLoading(false);
+                }
+              }}
+              disabled={favoriteLoading}
+              className={`absolute top-4 right-4 p-3 rounded-full bg-white/90 backdrop-blur-xs text-neutral-700 hover:text-red-500 transition-colors shadow-sm z-10 ${
+                favoriteLoading ? 'opacity-50' : ''
+              }`}
             >
               {isFavorite ? <HiHeart className="w-5 h-5 text-red-500" /> : <HiOutlineHeart className="w-5 h-5" />}
             </button>

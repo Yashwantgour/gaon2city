@@ -11,6 +11,8 @@ import {
   HiShoppingCart,
   HiClipboardDocumentList,
   HiUser,
+  HiOutlineHeart,
+  HiHeart,
 } from 'react-icons/hi2';
 import { selectCartCount } from '../../features/cart/cartSlice';
 
@@ -26,6 +28,12 @@ const navItems = [
     label: 'Market',
     icon: HiOutlineBuildingStorefront,
     activeIcon: HiBuildingStorefront,
+  },
+  {
+    to: '/favorites',
+    label: 'Wishlist',
+    icon: HiOutlineHeart,
+    activeIcon: HiHeart,
   },
   {
     to: '/cart',
