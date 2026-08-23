@@ -1,12 +1,20 @@
-import { supabaseAdmin } from '../config/supabase.js';
+import { supabaseAdmin, createUserClient } from '../config/supabase.js';
 import { ApiError } from '../utils/ApiError.js';
 import { logger } from '../utils/logger.js';
 
 /**
+ * Helper to pick active client (user-scoped client with Bearer JWT or admin).
+ */
+function getClient(accessToken) {
+  return accessToken ? createUserClient(accessToken) : supabaseAdmin;
+}
+
+/**
  * Get all favorited products for a user, with full product + seller + images data.
  */
-export async function getUserFavorites(userId) {
-  const { data, error } = await supabaseAdmin
+export async function getUserFavorites(userId, accessToken) {
+  const client = getClient(accessToken);
+  const { data, error } = await client
     .from('favorites')
     .select(`
       product_id,
@@ -41,8 +49,9 @@ export async function getUserFavorites(userId) {
 /**
  * Get just the product IDs that a user has favorited (for bulk-checking on marketplace).
  */
-export async function getUserFavoriteIds(userId) {
-  const { data, error } = await supabaseAdmin
+export async function getUserFavoriteIds(userId, accessToken) {
+  const client = getClient(accessToken);
+  const { data, error } = await client
     .from('favorites')
     .select('product_id')
     .eq('user_id', userId);
@@ -58,7 +67,9 @@ export async function getUserFavoriteIds(userId) {
 /**
  * Add a product to favorites.
  */
-export async function addFavorite(userId, productId) {
+export async function addFavorite(userId, productId, accessToken) {
+  const client = getClient(accessToken);
+
   // 1. Verify the product exists and is active
   const { data: product, error: prodErr } = await supabaseAdmin
     .from('products')
@@ -71,7 +82,7 @@ export async function addFavorite(userId, productId) {
   }
 
   // 2. Check if already favorited
-  const { data: existing } = await supabaseAdmin
+  const { data: existing } = await client
     .from('favorites')
     .select('user_id')
     .eq('user_id', userId)
@@ -84,8 +95,8 @@ export async function addFavorite(userId, productId) {
     return { product_id: productId, already_existed: true };
   }
 
-  // 3. Insert favorite
-  const { data, error } = await supabaseAdmin
+  // 3. Insert favorite with user-scoped client
+  const { data, error } = await client
     .from('favorites')
     .insert({ user_id: userId, product_id: productId })
     .select()
@@ -102,8 +113,9 @@ export async function addFavorite(userId, productId) {
 /**
  * Remove a product from favorites.
  */
-export async function removeFavorite(userId, productId) {
-  const { error } = await supabaseAdmin
+export async function removeFavorite(userId, productId, accessToken) {
+  const client = getClient(accessToken);
+  const { error } = await client
     .from('favorites')
     .delete()
     .eq('user_id', userId)
@@ -120,8 +132,9 @@ export async function removeFavorite(userId, productId) {
 /**
  * Check if a specific product is favorited by the user.
  */
-export async function checkFavorite(userId, productId) {
-  const { data, error } = await supabaseAdmin
+export async function checkFavorite(userId, productId, accessToken) {
+  const client = getClient(accessToken);
+  const { data, error } = await client
     .from('favorites')
     .select('user_id')
     .eq('user_id', userId)

@@ -5,7 +5,7 @@ import * as favoritesService from '../services/favoritesService.js';
  */
 export async function listFavorites(req, res, next) {
   try {
-    const favorites = await favoritesService.getUserFavorites(req.user.id);
+    const favorites = await favoritesService.getUserFavorites(req.user.id, req.accessToken);
     res.json(favorites);
   } catch (err) {
     next(err);
@@ -17,7 +17,7 @@ export async function listFavorites(req, res, next) {
  */
 export async function listFavoriteIds(req, res, next) {
   try {
-    const ids = await favoritesService.getUserFavoriteIds(req.user.id);
+    const ids = await favoritesService.getUserFavoriteIds(req.user.id, req.accessToken);
     res.json(ids);
   } catch (err) {
     next(err);
@@ -29,7 +29,7 @@ export async function listFavoriteIds(req, res, next) {
  */
 export async function addFavorite(req, res, next) {
   try {
-    const result = await favoritesService.addFavorite(req.user.id, req.body.product_id);
+    const result = await favoritesService.addFavorite(req.user.id, req.body.product_id, req.accessToken);
     res.status(201).json(result);
   } catch (err) {
     next(err);
@@ -41,7 +41,7 @@ export async function addFavorite(req, res, next) {
  */
 export async function removeFavorite(req, res, next) {
   try {
-    const result = await favoritesService.removeFavorite(req.user.id, req.params.productId);
+    const result = await favoritesService.removeFavorite(req.user.id, req.params.productId, req.accessToken);
     res.json(result);
   } catch (err) {
     next(err);
@@ -53,9 +53,10 @@ export async function removeFavorite(req, res, next) {
  */
 export async function checkFavorite(req, res, next) {
   try {
-    const result = await favoritesService.checkFavorite(req.user.id, req.params.productId);
+    const result = await favoritesService.checkFavorite(req.user.id, req.params.productId, req.accessToken);
     res.json(result);
   } catch (err) {
     next(err);
   }
 }
+
