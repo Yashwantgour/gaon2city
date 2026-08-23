@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../config/supabase.js';
 import { ApiError } from '../utils/ApiError.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * Get all favorited products for a user, with full product + seller + images data.
@@ -10,7 +11,7 @@ export async function getUserFavorites(userId) {
     .select(`
       product_id,
       created_at,
-      product:products!product_id (
+      product:products (
         id, seller_id, title, slug, description, price, quantity, condition, status,
         latitude, longitude, pickup_available, delivery_available, created_at,
         seller:profiles!seller_id ( id, name, avatar_url, seller_type, village, city, verification_status ),
@@ -21,7 +22,8 @@ export async function getUserFavorites(userId) {
     .order('created_at', { ascending: false });
 
   if (error) {
-    throw ApiError.internal('Failed to fetch favorites');
+    logger.error(`Failed to fetch favorites for user ${userId}: ${error.message}`);
+    throw ApiError.internal(`Failed to fetch favorites: ${error.message}`);
   }
 
   // Filter out any favorites where the product was deleted or is no longer active
@@ -46,7 +48,8 @@ export async function getUserFavoriteIds(userId) {
     .eq('user_id', userId);
 
   if (error) {
-    throw ApiError.internal('Failed to fetch favorite IDs');
+    logger.error(`Failed to fetch favorite IDs for user ${userId}: ${error.message}`);
+    throw ApiError.internal(`Failed to fetch favorite IDs: ${error.message}`);
   }
 
   return (data || []).map((f) => f.product_id);
@@ -56,18 +59,18 @@ export async function getUserFavoriteIds(userId) {
  * Add a product to favorites.
  */
 export async function addFavorite(userId, productId) {
-  // Verify the product exists and is active
-  const { data: product } = await supabaseAdmin
+  // 1. Verify the product exists and is active
+  const { data: product, error: prodErr } = await supabaseAdmin
     .from('products')
     .select('id, status')
     .eq('id', productId)
-    .single();
+    .maybeSingle();
 
-  if (!product || product.status === 'deleted') {
-    throw ApiError.notFound('Product not found');
+  if (prodErr || !product || product.status === 'deleted') {
+    throw ApiError.notFound('Product not found or has been deleted');
   }
 
-  // Check if already favorited
+  // 2. Check if already favorited
   const { data: existing } = await supabaseAdmin
     .from('favorites')
     .select('user_id')
@@ -81,6 +84,7 @@ export async function addFavorite(userId, productId) {
     return { product_id: productId, already_existed: true };
   }
 
+  // 3. Insert favorite
   const { data, error } = await supabaseAdmin
     .from('favorites')
     .insert({ user_id: userId, product_id: productId })
@@ -88,7 +92,8 @@ export async function addFavorite(userId, productId) {
     .single();
 
   if (error) {
-    throw ApiError.internal('Failed to add favorite');
+    logger.error(`Failed to insert favorite: ${error.message} (code: ${error.code})`);
+    throw ApiError.internal(`Failed to add favorite: ${error.message}`);
   }
 
   return data;
@@ -105,7 +110,8 @@ export async function removeFavorite(userId, productId) {
     .eq('product_id', productId);
 
   if (error) {
-    throw ApiError.internal('Failed to remove favorite');
+    logger.error(`Failed to delete favorite: ${error.message}`);
+    throw ApiError.internal(`Failed to remove favorite: ${error.message}`);
   }
 
   return { removed: true };
@@ -115,7 +121,7 @@ export async function removeFavorite(userId, productId) {
  * Check if a specific product is favorited by the user.
  */
 export async function checkFavorite(userId, productId) {
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('favorites')
     .select('user_id')
     .eq('user_id', userId)
@@ -123,5 +129,10 @@ export async function checkFavorite(userId, productId) {
     .limit(1)
     .maybeSingle();
 
+  if (error) {
+    logger.error(`Failed to check favorite: ${error.message}`);
+  }
+
   return { isFavorited: !!data };
 }
+
