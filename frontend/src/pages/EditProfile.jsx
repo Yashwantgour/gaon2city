@@ -14,6 +14,9 @@ import Input from '../components/common/Input';
 import Button from '../components/common/Button';
 import { updateProfile } from '../services/authApi';
 import { uploadFile } from '../services/storageService';
+import { geocodeAddress } from '../services/mapApi';
+import { setLocation } from '../features/location/locationSlice';
+import { useLocation } from '../hooks/useLocation';
 import { loginSuccess } from '../features/auth/authSlice';
 import { showToast } from '../features/ui/uiSlice';
 import { SELLER_TYPES } from '../utils/constants';
@@ -123,6 +126,32 @@ export default function EditProfile() {
     return Object.keys(newErrors).length === 0;
   };
 
+  const { requestLocation } = useLocation();
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+
+  const handleDetectGPS = async () => {
+    setIsDetectingLocation(true);
+    try {
+      const res = await requestLocation();
+      if (res?.success && res.location) {
+        const loc = res.location;
+        setFormData((prev) => ({
+          ...prev,
+          village: loc.locality || prev.village,
+          city: loc.city || prev.city,
+          district: loc.district || prev.district,
+          state: loc.state || prev.state,
+          postal_code: loc.pincode || prev.postal_code,
+        }));
+        dispatch(showToast({ type: 'success', message: 'Location auto-filled from GPS!' }));
+      }
+    } catch (err) {
+      console.warn('GPS detection failed:', err);
+    } finally {
+      setIsDetectingLocation(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
@@ -141,9 +170,60 @@ export default function EditProfile() {
         seller_type: formData.seller_type,
       });
 
-      // Update Redux state
+      // Update Redux Auth state
       dispatch(loginSuccess(updatedProfile));
-      dispatch(showToast({ type: 'success', message: 'Profile updated successfully! 🎉' }));
+
+      // Synchronize updated address with Mapbox / Redux Location state
+      const addressParts = [
+        formData.village?.trim(),
+        formData.city?.trim(),
+        formData.district?.trim(),
+        formData.state?.trim(),
+        formData.postal_code?.trim(),
+      ].filter(Boolean);
+
+      if (addressParts.length > 0) {
+        const geoQuery = addressParts.join(', ');
+        try {
+          const geoResults = await geocodeAddress(geoQuery);
+          if (geoResults && geoResults.length > 0) {
+            const topMatch = geoResults[0];
+            dispatch(
+              setLocation({
+                latitude: topMatch.latitude,
+                longitude: topMatch.longitude,
+                locationName: formData.village?.trim() || formData.city?.trim() || topMatch.name || 'Selected Location',
+                locality: formData.village?.trim() || topMatch.locality || '',
+                city: formData.city?.trim() || topMatch.city || '',
+                district: formData.district?.trim() || topMatch.district || '',
+                state: formData.state?.trim() || topMatch.state || '',
+                pincode: formData.postal_code?.trim() || topMatch.pincode || '',
+                formattedAddress: topMatch.formatted_address || geoQuery,
+                addressLabel: 'Profile Location',
+              })
+            );
+          } else {
+            dispatch(
+              setLocation({
+                latitude: null,
+                longitude: null,
+                locationName: formData.village?.trim() || formData.city?.trim() || 'Selected Location',
+                locality: formData.village?.trim() || '',
+                city: formData.city?.trim() || '',
+                district: formData.district?.trim() || '',
+                state: formData.state?.trim() || '',
+                pincode: formData.postal_code?.trim() || '',
+                formattedAddress: geoQuery,
+                addressLabel: 'Profile Location',
+              })
+            );
+          }
+        } catch (geoErr) {
+          console.warn('Geocoding updated profile address failed:', geoErr);
+        }
+      }
+
+      dispatch(showToast({ type: 'success', message: 'Profile & Location updated successfully! 🎉' }));
       navigate('/profile');
     } catch (err) {
       console.error('Failed to update profile:', err);
@@ -283,10 +363,21 @@ export default function EditProfile() {
 
         {/* Location Details */}
         <div className="bg-white rounded-3xl border border-neutral-100 p-6 space-y-4 shadow-xs">
-          <h2 className="text-sm font-bold text-neutral-900 uppercase tracking-wider flex items-center gap-1.5">
-            <HiOutlineMapPin className="w-4 h-4 text-primary-500" />
-            Location & Address
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-neutral-900 uppercase tracking-wider flex items-center gap-1.5">
+              <HiOutlineMapPin className="w-4 h-4 text-primary-500" />
+              Location & Address
+            </h2>
+            <button
+              type="button"
+              onClick={handleDetectGPS}
+              disabled={isDetectingLocation}
+              className="text-xs font-semibold text-primary-600 hover:text-primary-700 bg-primary-50 hover:bg-primary-100/80 px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <HiOutlineMapPin className="w-3.5 h-3.5" />
+              <span>{isDetectingLocation ? 'Detecting GPS...' : 'Use Current GPS'}</span>
+            </button>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
