@@ -78,7 +78,7 @@ export async function getSellerProfile(sellerId) {
   return data;
 }
 
-export async function updateProfile(userId, updates, accessToken) {
+export async function updateProfile(userId, updates, accessToken, userEmail) {
   const client = getClient(accessToken);
 
   const allowedFields = [
@@ -86,27 +86,41 @@ export async function updateProfile(userId, updates, accessToken) {
     'district', 'state', 'postal_code', 'seller_type',
   ];
 
-  const safeUpdates = { id: userId };
+  const updateFields = {};
   for (const key of allowedFields) {
     if (updates[key] !== undefined) {
-      safeUpdates[key] = updates[key];
+      updateFields[key] = updates[key];
     }
   }
 
-  // Check if profile exists, if not get email from auth user
-  const { data: existingProfile } = await supabaseAdmin
+  // 1. Direct UPDATE on existing profile (never touches or overwrites email)
+  let { data, error } = await supabaseAdmin
     .from('profiles')
-    .select('id, name, email')
+    .update(updateFields)
     .eq('id', userId)
+    .select()
     .maybeSingle();
 
-  if (!existingProfile) {
+  // 2. If update was successful, return immediately
+  if (!error && data) {
+    return data;
+  }
+
+  // 3. If no row existed, build complete row with email for safe insert
+  const safeInsert = {
+    id: userId,
+    email: userEmail || updates.email || null,
+    name: updateFields.name || 'User',
+    ...updateFields,
+  };
+
+  if (!safeInsert.email) {
     try {
       const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
       if (authUser?.user) {
-        safeUpdates.email = authUser.user.email;
-        if (!safeUpdates.name) {
-          safeUpdates.name = authUser.user.user_metadata?.name || authUser.user.email?.split('@')[0] || 'User';
+        safeInsert.email = authUser.user.email;
+        if (!safeInsert.name || safeInsert.name === 'User') {
+          safeInsert.name = authUser.user.user_metadata?.name || authUser.user.email?.split('@')[0] || 'User';
         }
       }
     } catch {
@@ -114,28 +128,31 @@ export async function updateProfile(userId, updates, accessToken) {
     }
   }
 
-  // 1. Try upsert via supabaseAdmin (service role key bypasses RLS)
-  let { data, error } = await supabaseAdmin
+  const upsertRes = await supabaseAdmin
     .from('profiles')
-    .upsert(safeUpdates, { onConflict: 'id' })
+    .upsert(safeInsert, { onConflict: 'id' })
     .select()
     .single();
 
-  // 2. If supabaseAdmin had an issue, fallback to user-scoped client
+  data = upsertRes.data;
+  error = upsertRes.error;
+
+  // Fallback to user client if admin key had issues
   if (error && client !== supabaseAdmin) {
-    logger.warn(`supabaseAdmin upsert failed (${error.message}), trying user client...`);
+    logger.warn(`supabaseAdmin upsert fallback (${error.message}), trying user client...`);
     const userRes = await client
       .from('profiles')
-      .upsert(safeUpdates, { onConflict: 'id' })
+      .upsert(safeInsert, { onConflict: 'id' })
       .select()
       .single();
     data = userRes.data;
     error = userRes.error;
   }
 
-  if (error) {
-    logger.error(`Failed to update profile for user ${userId}: ${error.message} (code: ${error.code})`);
-    throw ApiError.internal(`Failed to update profile: ${error.message}`);
+  if (error || !data) {
+    const errMsg = error?.message || 'Failed to update profile';
+    logger.error(`Failed to update profile for user ${userId}: ${errMsg}`);
+    throw ApiError.internal(`Failed to update profile: ${errMsg}`);
   }
 
   return data;

@@ -32,7 +32,7 @@ export async function getSellerProfile(req, res, next) {
  */
 export async function updateProfile(req, res, next) {
   try {
-    const updated = await authService.updateProfile(req.user.id, req.body, req.accessToken);
+    const updated = await authService.updateProfile(req.user.id, req.body, req.accessToken, req.user?.email);
     res.json(updated);
   } catch (err) {
     next(err);
