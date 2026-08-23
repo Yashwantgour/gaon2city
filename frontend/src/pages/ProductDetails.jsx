@@ -313,8 +313,8 @@ export default function ProductDetails() {
                     setIsFavorite(true);
                     dispatch(showToast({ type: 'success', message: 'Added to wishlist ❤️' }));
                   }
-                } catch {
-                  dispatch(showToast({ type: 'error', message: 'Failed to update wishlist' }));
+                } catch (err) {
+                  dispatch(showToast({ type: 'error', message: err?.message || 'Failed to update wishlist' }));
                 } finally {
                   setFavoriteLoading(false);
                 }

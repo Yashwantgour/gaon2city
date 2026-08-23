@@ -93,7 +93,7 @@ export default function ProductCard({ product, index = 0, favoriteProductIds, on
       }
     } catch (err) {
       console.error('Favorite toggle failed:', err);
-      dispatch(showToast({ type: 'error', message: 'Failed to update wishlist' }));
+      dispatch(showToast({ type: 'error', message: err?.message || 'Failed to update wishlist' }));
     } finally {
       setFavoriteLoading(false);
     }
